@@ -28,13 +28,20 @@ typedef enum {
 
 void uiInit();
 void uiCleanup();
+
 void uiUpdateScreen();
-void uiGetSize(int* width, int* height);
+
+void uiGetSize(u32* width, u32* height);
+
 void uiClear();
+
 void uiSetLineHighlighted(bool highlight);
 void uiSetTextColor(TextColor color);
+
 void uiPrint(const char* str, ...);
 void uiPrintv(const char* str, va_list list);
+
 void uiFlush();
 void uiSync();
+
 UIKey uiReadKey();

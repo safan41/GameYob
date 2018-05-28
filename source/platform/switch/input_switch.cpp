@@ -1,7 +1,7 @@
 #ifdef BACKEND_SWITCH
 
-#include <string.h>
-#include <time.h>
+#include <cstring>
+#include <ctime>
 
 #include <switch.h>
 
@@ -13,7 +13,7 @@
 
 #define NUM_BUTTONS 27
 
-static const char* switchKeyNames[NUM_BUTTONS] = {
+static const std::string switchKeyNames[NUM_BUTTONS] = {
         "A",                 // 0
         "B",                 // 1
         "X",                 // 2
@@ -124,8 +124,8 @@ void inputCleanup() {
 void inputUpdate() {
     hidScanInput();
 
-    u64 down = hidKeysDown(CONTROLLER_HANDHELD);
-    u64 held = hidKeysHeld(CONTROLLER_HANDHELD);
+    u64 down = hidKeysDown(CONTROLLER_P1_AUTO);
+    u64 held = hidKeysHeld(CONTROLLER_P1_AUTO);
 
     for(u32 i = 0; i < NUM_FUNC_KEYS; i++) {
         if(!(held & funcKeyMapping[i])) {
@@ -139,13 +139,13 @@ void inputUpdate() {
         }
     }
 
-    if(menuOn || isFileChooserActive()) {
+    if(menuIsVisible()) {
         for(u32 i = 0; i < NUM_BUTTONS; i++) {
             if(uiForceReleased[i]) {
                 continue;
             }
 
-            time_t currTime = time(NULL);
+            time_t currTime = time(nullptr);
 
             u64 button = 1U << i;
             bool pressed = false;
@@ -167,26 +167,26 @@ void inputUpdate() {
     }
 }
 
-bool inputKeyHeld(int key) {
-    return key >= 0 && key < NUM_FUNC_KEYS && !forceReleased[key] && (hidKeysHeld(CONTROLLER_HANDHELD) & funcKeyMapping[key]) != 0;
+bool inputKeyHeld(u32 key) {
+    return key < NUM_FUNC_KEYS && !forceReleased[key] && (hidKeysHeld(CONTROLLER_HANDHELD) & funcKeyMapping[key]) != 0;
 }
 
-bool inputKeyPressed(int key) {
-    return key >= 0 && key < NUM_FUNC_KEYS && !forceReleased[key] && (hidKeysDown(CONTROLLER_HANDHELD) & funcKeyMapping[key]) != 0;
+bool inputKeyPressed(u32 key) {
+    return key < NUM_FUNC_KEYS && !forceReleased[key] && (hidKeysDown(CONTROLLER_HANDHELD) & funcKeyMapping[key]) != 0;
 }
 
-void inputKeyRelease(int key) {
-    if(key >= 0 && key < NUM_FUNC_KEYS) {
+void inputKeyRelease(u32 key) {
+    if(key < NUM_FUNC_KEYS) {
         forceReleased[key] = true;
     }
 }
 
 void inputReleaseAll() {
-    for(int i = 0; i < NUM_FUNC_KEYS; i++) {
+    for(u32 i = 0; i < NUM_FUNC_KEYS; i++) {
         inputKeyRelease(i);
     }
 
-    for(int i = 0; i < NUM_BUTTONS; i++) {
+    for(u32 i = 0; i < NUM_BUTTONS; i++) {
         uiForceReleased[i] = true;
     }
 }
@@ -199,20 +199,24 @@ u16 inputGetMotionSensorY() {
     return 0x7FF; // TODO
 }
 
-int inputGetKeyCount() {
+void inputSetRumble(bool rumble) {
+    // TODO
+}
+
+u32 inputGetKeyCount() {
     return NUM_BUTTONS;
 }
 
-bool inputIsValidKey(int keyIndex) {
-    return keyIndex >= 0 && keyIndex < NUM_BUTTONS && strlen(switchKeyNames[keyIndex]) > 0;
+bool inputIsValidKey(u32 keyIndex) {
+    return keyIndex >= 0 && keyIndex < NUM_BUTTONS && switchKeyNames[keyIndex].length() > 0;
 }
 
-const char* inputGetKeyName(int keyIndex) {
+const std::string inputGetKeyName(u32 keyIndex) {
     return switchKeyNames[keyIndex];
 }
 
-KeyConfig inputGetDefaultKeyConfig() {
-    return defaultKeyConfig;
+KeyConfig* inputGetDefaultKeyConfig() {
+    return &defaultKeyConfig;
 }
 
 void inputLoadKeyConfig(KeyConfig* keyConfig) {

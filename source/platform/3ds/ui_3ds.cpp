@@ -1,14 +1,13 @@
 #ifdef BACKEND_3DS
 
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include <cstring>
+#include <cstdarg>
 #include <queue>
 
 #include <3ds.h>
 
-#include "platform/common/menu.h"
+#include "platform/common/menu/menu.h"
+#include "platform/common/config.h"
 #include "platform/ui.h"
 
 static gfxScreen_t currConsole;
@@ -38,21 +37,23 @@ void uiInit() {
 }
 
 void uiCleanup() {
-    if(topConsole != NULL) {
+    if(topConsole != nullptr) {
         free(topConsole);
-        topConsole = NULL;
+        topConsole = nullptr;
     }
 
-    if(bottomConsole != NULL) {
+    if(bottomConsole != nullptr) {
         free(bottomConsole);
-        bottomConsole = NULL;
+        bottomConsole = nullptr;
     }
 }
 
 void uiUpdateScreen() {
-    gfxScreen_t screen = !gameScreen == 0 ? GFX_TOP : GFX_BOTTOM;
+    u8 gameScreen = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_GAME_SCREEN);
+
+    gfxScreen_t screen = gameScreen == GAME_SCREEN_BOTTOM ? GFX_TOP : GFX_BOTTOM;
     if(currConsole != screen) {
-        gfxScreen_t oldScreen = gameScreen == 0 ? GFX_TOP : GFX_BOTTOM;
+        gfxScreen_t oldScreen = gameScreen == GAME_SCREEN_TOP ? GFX_TOP : GFX_BOTTOM;
         gfxSetScreenFormat(oldScreen, GSP_BGR8_OES);
         gfxSetDoubleBuffering(oldScreen, true);
 
@@ -75,20 +76,20 @@ void uiUpdateScreen() {
         gspWaitForVBlank();
 
         PrintConsole* console = screen == GFX_TOP ? topConsole : bottomConsole;
-        console->frameBuffer = (u16*) gfxGetFramebuffer(screen, GFX_LEFT, NULL, NULL);
+        console->frameBuffer = (u16*) gfxGetFramebuffer(screen, GFX_LEFT, nullptr, nullptr);
         consoleSelect(console);
     }
 }
 
-void uiGetSize(int* width, int* height) {
-    PrintConsole* console = !gameScreen == 0 ? topConsole : bottomConsole;
+void uiGetSize(u32* width, u32* height) {
+    PrintConsole* console = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_GAME_SCREEN) == GAME_SCREEN_BOTTOM ? topConsole : bottomConsole;
 
-    if(width != NULL) {
-        *width = console->consoleWidth;
+    if(width != nullptr) {
+        *width = (u32) console->consoleWidth;
     }
 
-    if(height != NULL) {
-        *height = console->consoleHeight;
+    if(height != nullptr) {
+        *height = (u32) console->consoleHeight;
     }
 }
 

@@ -1,3 +1,6 @@
+#include <istream>
+#include <ostream>
+
 #include "apu.h"
 #include "cartridge.h"
 #include "cpu.h"
@@ -9,30 +12,14 @@
 #include "serial.h"
 #include "timer.h"
 
-static const u8 STATE_VERSION = 11;
+static const u8 STATE_VERSION = 12;
 
-Gameboy::Gameboy() {
-    this->cartridge = NULL;
-
-    this->mmu = new MMU(this);
-    this->cpu = new CPU(this);
-    this->ppu = new PPU(this);
-    this->apu = new APU(this);
-    this->sgb = new SGB(this);
-    this->timer = new Timer(this);
-    this->serial = new Serial(this);
+Gameboy::Gameboy() : mmu(this), cpu(this), ppu(this), apu(this), sgb(this), timer(this), serial(this) {
+    this->cartridge = nullptr;
 }
 
 Gameboy::~Gameboy() {
-    this->cartridge = NULL;
-
-    delete this->mmu;
-    delete this->cpu;
-    delete this->ppu;
-    delete this->apu;
-    delete this->sgb;
-    delete this->timer;
-    delete this->serial;
+    this->cartridge = nullptr;
 }
 
 void Gameboy::powerOn() {
@@ -40,15 +27,18 @@ void Gameboy::powerOn() {
         return;
     }
 
-    if(this->cartridge != NULL) {
-        if((this->settings.gbcModeOption == GBC_IF_NEEDED && this->cartridge->isCgbRequired()) || (this->settings.gbcModeOption == GBC_ON && this->cartridge->isCgbSupported())) {
-            if(this->settings.sgbModeOption == SGB_PREFER_SGB && this->cartridge->isSgbEnhanced()) {
+    if(this->cartridge != nullptr) {
+        GBCMode gbcMode = (GBCMode) this->settings.getOption(GB_OPT_GBC_MODE);
+        SGBMode sgbMode = (SGBMode) this->settings.getOption(GB_OPT_SGB_MODE);
+
+        if((gbcMode == GBC_IF_NEEDED && this->cartridge->isCgbRequired()) || (gbcMode == GBC_ON && this->cartridge->isCgbSupported())) {
+            if(sgbMode == SGB_PREFER_SGB && this->cartridge->isSgbEnhanced()) {
                 this->gbMode = MODE_SGB;
             } else {
                 this->gbMode = MODE_CGB;
             }
         } else {
-            if(this->settings.sgbModeOption != SGB_OFF && this->cartridge->isSgbEnhanced()) {
+            if(sgbMode != SGB_OFF && this->cartridge->isSgbEnhanced()) {
                 this->gbMode = MODE_SGB;
             } else {
                 this->gbMode = MODE_GB;
@@ -58,15 +48,15 @@ void Gameboy::powerOn() {
         this->gbMode = MODE_CGB;
     }
 
-    this->mmu->reset();
-    this->cpu->reset();
-    this->ppu->reset();
-    this->apu->reset();
-    this->sgb->reset();
-    this->timer->reset();
-    this->serial->reset();
+    this->mmu.reset();
+    this->cpu.reset();
+    this->ppu.reset();
+    this->apu.reset();
+    this->sgb.reset();
+    this->timer.reset();
+    this->serial.reset();
 
-    if(this->cartridge != NULL) {
+    if(this->cartridge != nullptr) {
         this->cartridge->reset(this);
     }
 
@@ -81,22 +71,22 @@ bool Gameboy::loadState(std::istream& data) {
     u8 version;
     data.read((char*) &version, sizeof(version));
 
-    if(version < 11 || version > STATE_VERSION) {
+    if(version < 12 || version > STATE_VERSION) {
         return false;
     }
 
     data.read((char*) &this->gbMode, sizeof(this->gbMode));
 
-    this->mmu->loadState(data, version);
-    this->cpu->loadState(data, version);
-    this->ppu->loadState(data, version);
-    this->apu->loadState(data, version);
-    this->sgb->loadState(data, version);
-    this->timer->loadState(data, version);
-    this->serial->loadState(data, version);
+    data >> this->mmu;
+    data >> this->cpu;
+    data >> this->ppu;
+    data >> this->apu;
+    data >> this->sgb;
+    data >> this->timer;
+    data >> this->serial;
 
-    if(this->cartridge != NULL) {
-        this->cartridge->loadState(data, version);
+    if(this->cartridge != nullptr) {
+        data >> *this->cartridge;
     }
 
     return true;
@@ -107,16 +97,16 @@ bool Gameboy::saveState(std::ostream& data) {
 
     data.write((char*) &this->gbMode, sizeof(this->gbMode));
 
-    this->mmu->saveState(data);
-    this->cpu->saveState(data);
-    this->ppu->saveState(data);
-    this->apu->saveState(data);
-    this->sgb->saveState(data);
-    this->timer->saveState(data);
-    this->serial->saveState(data);
+    data << this->mmu;
+    data << this->cpu;
+    data << this->ppu;
+    data << this->apu;
+    data << this->sgb;
+    data << this->timer;
+    data << this->serial;
 
-    if(this->cartridge != NULL) {
-        this->cartridge->saveState(data);
+    if(this->cartridge != nullptr) {
+        data << *this->cartridge;
     }
 
     return true;
@@ -131,6 +121,6 @@ void Gameboy::runFrame() {
     this->audioSamplesWritten = 0;
 
     while(!this->ranFrame) {
-        this->cpu->run();
+        this->cpu.run();
     }
 }

@@ -2,9 +2,9 @@
 
 #include <unistd.h>
 
-#include "platform/ui.h"
-
 #include <curses.h>
+
+#include "platform/ui.h"
 
 WINDOW* window;
 
@@ -46,17 +46,17 @@ void uiCleanup() {
 void uiUpdateScreen() {
 }
 
-void uiGetSize(int* width, int* height) {
+void uiGetSize(u32* width, u32* height) {
     int y = 0;
     int x = 0;
     getmaxyx(window, y, x);
 
-    if(width != NULL) {
-        *width = x;
+    if(width != nullptr) {
+        *width = (u32) x;
     }
 
-    if(height != NULL) {
-        *height = y;
+    if(height != nullptr) {
+        *height = (u32) y;
     }
 }
 

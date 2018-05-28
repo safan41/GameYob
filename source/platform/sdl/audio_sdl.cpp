@@ -1,10 +1,10 @@
 #ifdef BACKEND_SDL
 
+#include <SDL2/SDL.h>
+
 #include "platform/common/manager.h"
 #include "platform/audio.h"
 #include "platform/gfx.h"
-
-#include <SDL2/SDL.h>
 
 static bool initialized = false;
 
@@ -18,9 +18,9 @@ void audioInit() {
     as.silence = 0;
     as.samples = 2048;
     as.size = 0;
-    as.callback = NULL;
-    as.userdata = NULL;
-    if((device = SDL_OpenAudioDevice(NULL, 0, &as, &as, 0)) < 0) {
+    as.callback = nullptr;
+    as.userdata = nullptr;
+    if((device = SDL_OpenAudioDevice(nullptr, 0, &as, &as, 0)) < 0) {
         return;
     }
 

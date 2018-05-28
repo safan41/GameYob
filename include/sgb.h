@@ -1,20 +1,18 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
+
+class Gameboy;
 
 class SGB {
 public:
     SGB(Gameboy* gameboy);
 
     void reset();
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     void update();
+
+    friend std::istream& operator>>(std::istream& is, SGB& sgb);
+    friend std::ostream& operator<<(std::ostream& os, const SGB& sgb);
 
     inline u8 getGfxMask() {
         return this->mask;
@@ -30,54 +28,54 @@ public:
 private:
     void refreshBg();
 
-    void loadAttrFile(int index);
+    void loadAttrFile(u8 index);
 
     // Begin commands
-    void palXX(int block);
-    void attrBlock(int block);
-    void attrLin(int block);
-    void attrDiv(int block);
-    void attrChr(int block);
-    void sound(int block);
-    void souTrn(int block);
-    void palSet(int block);
-    void palTrn(int block);
-    void atrcEn(int block);
-    void testEn(int block);
-    void iconEn(int block);
-    void dataSnd(int block);
-    void dataTrn(int block);
-    void mltReq(int block);
-    void jump(int block);
-    void chrTrn(int block);
-    void pctTrn(int block);
-    void attrTrn(int block);
-    void attrSet(int block);
-    void maskEn(int block);
-    void objTrn(int block);
+    void palXX();
+    void attrBlock();
+    void attrLin();
+    void attrDiv();
+    void attrChr();
+    void sound();
+    void souTrn();
+    void palSet();
+    void palTrn();
+    void atrcEn();
+    void testEn();
+    void iconEn();
+    void dataSnd();
+    void dataTrn();
+    void mltReq();
+    void jump();
+    void chrTrn();
+    void pctTrn();
+    void attrTrn();
+    void attrSet();
+    void maskEn();
+    void objTrn();
     // End commands
 
-    void (SGB::*sgbCommands[32])(int) = {
+    void (SGB::*sgbCommands[32])() = {
             &SGB::palXX, &SGB::palXX, &SGB::palXX, &SGB::palXX, &SGB::attrBlock,
             &SGB::attrLin, &SGB::attrDiv, &SGB::attrChr,
             &SGB::sound, &SGB::souTrn, &SGB::palSet, &SGB::palTrn, &SGB::atrcEn,
             &SGB::testEn, &SGB::iconEn, &SGB::dataSnd,
             &SGB::dataTrn, &SGB::mltReq, &SGB::jump, &SGB::chrTrn, &SGB::pctTrn,
             &SGB::attrTrn, &SGB::attrSet, &SGB::maskEn,
-            &SGB::objTrn, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+            &SGB::objTrn, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr
     };
 
     Gameboy* gameboy;
 
-    s32 packetLength; // Number of packets to be transferred this command
-    s32 packetsTransferred; // Number of packets which have been transferred so far
-    s32 packetBit; // Next bit # to be sent in the packet. -1 if no packet is being transferred.
+    u8 packetLength; // Number of packets to be transferred this command
+    u8 packetsTransferred; // Number of packets which have been transferred so far
+    u8 packetBit; // Next bit # to be sent in the packet. 0xFF if no packet is being transferred.
     u8 packet[16];
     u8 command;
 
-    // Data for various different sgb commands
+    // Data for various different SGB commands
     struct SgbCmdData {
-        int numDataSets;
+        u8 numDataSets;
 
         union {
             struct {
@@ -87,7 +85,8 @@ private:
 
             struct {
                 u8 writeStyle;
-                u8 x, y;
+                u8 x;
+                u8 y;
             } attrChr;
         };
     } cmdData;

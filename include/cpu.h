@@ -1,8 +1,5 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
 
 class Gameboy;
@@ -13,47 +10,15 @@ class Gameboy;
 #define INT_SERIAL 0x08
 #define INT_JOYPAD 0x10
 
-struct Registers {
-    union {
-        u8 r8[12];
-        u16 r16[6];
-    };
-};
-
-enum {
-    R8_F = 0,
-    R8_A,
-    R8_C,
-    R8_B,
-    R8_E,
-    R8_D,
-    R8_L,
-    R8_H,
-    R8_SP_P,
-    R8_SP_S,
-    R8_PC_C,
-    R8_PC_P
-};
-
-enum {
-    R16_AF = 0,
-    R16_BC,
-    R16_DE,
-    R16_HL,
-    R16_SP,
-    R16_PC
-};
-
 class CPU {
 public:
     CPU(Gameboy* gameboy);
 
     void reset();
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     void run();
+
+    friend std::istream& operator>>(std::istream& is, CPU& cpu);
+    friend std::ostream& operator<<(std::ostream& os, const CPU& cpu);
 
     inline void advanceCycles(u64 cycles) {
         this->cycleCount += cycles;
@@ -85,7 +50,12 @@ private:
     u64 cycleCount;
     u64 eventCycle;
 
-    struct Registers registers;
+    struct {
+        union {
+            u8 r8[12];
+            u16 r16[6];
+        };
+    } registers;
 
     bool haltState;
     bool haltBug;

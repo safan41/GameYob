@@ -1,8 +1,5 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
 
 class Timer {
@@ -10,11 +7,10 @@ public:
     Timer(Gameboy* gameboy);
 
     void reset();
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     void update();
+
+    friend std::istream& operator>>(std::istream& is, Timer& timer);
+    friend std::ostream& operator<<(std::ostream& os, const Timer& timer);
 private:
     Gameboy* gameboy;
 

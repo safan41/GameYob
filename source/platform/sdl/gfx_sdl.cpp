@@ -1,73 +1,79 @@
 #ifdef BACKEND_SDL
 
-#include <malloc.h>
-#include <time.h>
-
-#include <sstream>
-
-#include "platform/gfx.h"
+#include <cstdlib>
 
 #include <SDL2/SDL.h>
 
-static SDL_Rect screenRect = {0, 0, 256, 224};
-static SDL_Rect windowScreenRect = {0, 0, 256, 224};
+#include "platform/gfx.h"
+#include "ppu.h"
+
+static SDL_Rect screenRect = {0, 0, GB_FRAME_WIDTH, GB_FRAME_HEIGHT};
+static SDL_Rect windowScreenRect = {0, 0, GB_FRAME_WIDTH, GB_FRAME_HEIGHT};
 
 static SDL_Rect borderRect = {0, 0, 0, 0};
 static SDL_Rect windowBorderRect = {0, 0, 0, 0};
 
-static SDL_Window* window = NULL;
-static SDL_Renderer* renderer = NULL;
-static SDL_Texture* screenTexture = NULL;
-static SDL_Texture* borderTexture = NULL;
+static SDL_Window* window = nullptr;
+static SDL_Renderer* renderer = nullptr;
+static SDL_Texture* screenTexture = nullptr;
+static SDL_Texture* borderTexture = nullptr;
 
 static u32* screenBuffer;
 
 bool gfxInit() {
-    window = SDL_CreateWindow("GameYob", 0, 0, 256, 224, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
-    if(window == NULL) {
+    window = SDL_CreateWindow("GameYob", 0, 0, GB_FRAME_WIDTH, GB_FRAME_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+    if(window == nullptr) {
         return false;
     }
 
     renderer = SDL_CreateRenderer(window, -1, 0);
-    if(renderer == NULL) {
+    if(renderer == nullptr) {
         return false;
     }
 
-    screenTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 256, 224);
-    if(screenTexture == NULL) {
+    screenTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, GB_FRAME_WIDTH, GB_FRAME_HEIGHT);
+    if(screenTexture == nullptr) {
         return false;
     }
 
-    screenBuffer = (u32*) malloc(256 * 224 * sizeof(u32));
+    screenBuffer = (u32*) malloc(GB_FRAME_WIDTH * GB_FRAME_HEIGHT * sizeof(u32));
 
     return true;
 }
 
 void gfxCleanup() {
-    if(screenBuffer != NULL) {
+    if(screenBuffer != nullptr) {
         free(screenBuffer);
-        screenBuffer = NULL;
+        screenBuffer = nullptr;
     }
 
-    if(borderTexture != NULL) {
+    if(borderTexture != nullptr) {
         SDL_DestroyTexture(borderTexture);
-        borderTexture = NULL;
+        borderTexture = nullptr;
     }
 
-    if(screenTexture != NULL) {
+    if(screenTexture != nullptr) {
         SDL_DestroyTexture(screenTexture);
-        screenTexture = NULL;
+        screenTexture = nullptr;
     }
 
-    if(renderer != NULL) {
+    if(renderer != nullptr) {
         SDL_DestroyRenderer(renderer);
-        renderer = NULL;
+        renderer = nullptr;
     }
 
-    if(window != NULL) {
+    if(window != nullptr) {
         SDL_DestroyWindow(window);
-        window = NULL;
+        window = nullptr;
     }
+}
+
+u32* gfxGetScreenBuffer() {
+    return screenBuffer;
+}
+
+u32 gfxGetScreenPitch() {
+    return GB_FRAME_WIDTH;
 }
 
 void gfxUpdateWindow() {
@@ -75,8 +81,8 @@ void gfxUpdateWindow() {
     int h;
     SDL_GetWindowSize(window, &w, &h);
 
-    if(borderTexture != NULL) {
-        if(w == 256 && h == 224) {
+    if(borderTexture != nullptr) {
+        if(w == GB_FRAME_WIDTH && h == GB_FRAME_HEIGHT) {
             SDL_SetWindowSize(window, borderRect.w, borderRect.h);
             w = borderRect.w;
             h = borderRect.h;
@@ -87,15 +93,15 @@ void gfxUpdateWindow() {
         windowBorderRect.x = 0;
         windowBorderRect.y = 0;
 
-        windowScreenRect.w = (int) (w * (256.0f / (float) borderRect.w));
-        windowScreenRect.h = (int) (h * (224.0f / (float) borderRect.h));
+        windowScreenRect.w = (int) (w * ((float) GB_FRAME_WIDTH / (float) borderRect.w));
+        windowScreenRect.h = (int) (h * ((float) GB_FRAME_HEIGHT / (float) borderRect.h));
         windowScreenRect.x = (w - windowScreenRect.w) / 2;
         windowScreenRect.y = (h - windowScreenRect.h) / 2;
     } else {
         if(w == borderRect.w && h == borderRect.h) {
-            SDL_SetWindowSize(window, 256, 224);
-            w = 256;
-            h = 224;
+            SDL_SetWindowSize(window, GB_FRAME_WIDTH, GB_FRAME_HEIGHT);
+            w = GB_FRAME_WIDTH;
+            h = GB_FRAME_HEIGHT;
         }
 
         windowScreenRect.w = w;
@@ -105,19 +111,15 @@ void gfxUpdateWindow() {
     }
 }
 
-void gfxSetWindowSize(int width, int height) {
-    gfxUpdateWindow();
-}
-
 void gfxLoadBorder(u8* imgData, int imgWidth, int imgHeight) {
-    if(borderTexture != NULL) {
+    if(borderTexture != nullptr) {
         SDL_DestroyTexture(borderTexture);
-        borderTexture = NULL;
+        borderTexture = nullptr;
     }
 
-    if(imgData != NULL && imgWidth != 0 && imgHeight != 0) {
+    if(imgData != nullptr && imgWidth != 0 && imgHeight != 0) {
         borderTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, imgWidth, imgHeight);
-        if(borderTexture == NULL) {
+        if(borderTexture == nullptr) {
             return;
         }
 
@@ -132,35 +134,13 @@ void gfxLoadBorder(u8* imgData, int imgWidth, int imgHeight) {
     gfxUpdateWindow();
 }
 
-u32* gfxGetScreenBuffer() {
-    return screenBuffer;
-}
-
-u32 gfxGetScreenPitch() {
-    return 256;
-}
-
-void gfxTakeScreenshot() {
-    std::stringstream fileStream;
-    fileStream << "gameyob_" << time(NULL) << ".bmp";
-
-    int w;
-    int h;
-    SDL_GetWindowSize(window, &w, &h);
-
-    SDL_Surface *surface = SDL_CreateRGBSurface(0, w, h, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
-    SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch);
-    SDL_SaveBMP(surface, fileStream.str().c_str());
-    SDL_FreeSurface(surface);
-}
-
 void gfxDrawScreen() {
     SDL_RenderClear(renderer);
 
-    SDL_UpdateTexture(screenTexture, &screenRect, screenBuffer, 256 * sizeof(u32));
+    SDL_UpdateTexture(screenTexture, &screenRect, screenBuffer, GB_FRAME_WIDTH * sizeof(u32));
     SDL_RenderCopy(renderer, screenTexture, &screenRect, &windowScreenRect);
 
-    if(borderTexture != NULL) {
+    if(borderTexture != nullptr) {
         SDL_RenderCopy(renderer, borderTexture, &borderRect, &windowBorderRect);
     }
 

@@ -5,12 +5,10 @@
 
 int main(int argc, char* argv[]) {
     if(!systemInit(argc, argv)) {
-        return false;
+        return 1;
     }
 
     mgrInit();
-    setMenuDefaults();
-    configLoad();
 
     while(systemIsRunning()) {
         mgrRun();

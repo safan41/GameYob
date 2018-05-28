@@ -1,15 +1,11 @@
 #ifdef BACKEND_SWITCH
 
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include <cstring>
+#include <cstdarg>
 #include <queue>
 
 #include <switch.h>
-#include <platform/common/manager.h>
 
-#include "platform/common/menu/menu.h"
 #include "platform/ui.h"
 
 static TextColor textColor;
@@ -18,7 +14,7 @@ static bool highlighted;
 static std::queue<UIKey> keyQueue;
 
 void uiInit() {
-    consoleInit(NULL);
+    consoleInit(nullptr);
     consoleDebugInit(debugDevice_SVC);
 }
 
@@ -28,15 +24,15 @@ void uiCleanup() {
 void uiUpdateScreen() {
 }
 
-void uiGetSize(int* width, int* height) {
+void uiGetSize(u32* width, u32* height) {
     PrintConsole* console = consoleGetDefault();
 
-    if(width != NULL) {
-        *width = console->consoleWidth;
+    if(width != nullptr) {
+        *width = (u32) console->consoleWidth;
     }
 
-    if(height != NULL) {
-        *height = console->consoleHeight;
+    if(height != nullptr) {
+        *height = (u32) console->consoleHeight;
     }
 }
 

@@ -1,63 +1,25 @@
 #pragma once
 
-#include <stdio.h>
-
-#include <vector>
-
 #include "types.h"
 
-struct MenuOption {
-        const char* name;
-        void (* function)(int);
-        int numValues;
-        const char* values[15];
-        int defaultSelection;
+#include "platform/ui.h"
 
-        bool enabled;
-        int selection;
+class Menu {
+public:
+    virtual ~Menu() {
+    }
+
+    // Returns whether or not a redraw is needed.
+    virtual bool processInput(UIKey key, u32 width, u32 height) = 0;
+    virtual void draw(u32 width, u32 height) = 0;
 };
 
-struct SubMenu {
-    const char* name;
-    int numOptions;
-    MenuOption options[13];
-};
+bool menuIsVisible();
 
-extern SubMenu menuList[];
-extern const int numMenus;
+void menuPush(Menu* menu);
+void menuPop();
 
-extern std::vector<std::string> supportedImages;
+void menuUpdate();
 
-extern bool menuOn;
-
-extern bool customBordersEnabled;
-extern int borderScaleMode;
-extern int gbColorizeMode;
-extern int pauseOnMenu;
-extern int stateNum;
-extern int gameScreen;
-extern int scaleMode;
-extern int scaleFilter;
-extern bool fpsOutput;
-extern bool timeOutput;
-extern int fastForwardFrameSkip;
-
-void setMenuDefaults();
-
-void displayMenu();
-void closeMenu();
-
-void redrawMenu();
-void updateMenu();
-void printMenuMessage(const char* s);
-
-void displaySubMenu(void (* updateFunc)());
-void closeSubMenu();
-
-int getMenuOption(const char* name);
-void setMenuOption(const char* name, int value);
-void enableMenuOption(const char* name);
-void disableMenuOption(const char* name);
-
-bool showConsoleDebug();
+void menuOpenMain();
 

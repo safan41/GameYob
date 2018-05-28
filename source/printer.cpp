@@ -1,4 +1,6 @@
-#include <string.h>
+#include <cstring>
+#include <istream>
+#include <ostream>
 
 #include "cartridge.h"
 #include "cpu.h"
@@ -36,51 +38,40 @@ void Printer::reset() {
     this->palette = 0;
     this->exposure = 0;
 
-    this->numPrinted = 0;
-
     this->nextUpdateCycle = 0;
 }
 
-void Printer::loadState(std::istream& data, u8 version) {
-    data.read((char*) this->gfx, sizeof(this->gfx));
-    data.read((char*) &this->gfxIndex, sizeof(this->gfxIndex));
-    data.read((char*) &this->packetByte, sizeof(this->packetByte));
-    data.read((char*) &this->status, sizeof(this->status));
-    data.read((char*) &this->cmd, sizeof(this->cmd));
-    data.read((char*) &this->cmdLength, sizeof(this->cmdLength));
-    data.read((char*) &this->packetCompressed, sizeof(this->packetCompressed));
-    data.read((char*) &this->compressionByte, sizeof(this->compressionByte));
-    data.read((char*) &this->compressionLen, sizeof(this->compressionLen));
-    data.read((char*) &this->expectedChecksum, sizeof(this->expectedChecksum));
-    data.read((char*) &this->checksum, sizeof(this->checksum));
-    data.read((char*) &this->cmd2Index, sizeof(this->cmd2Index));
-    data.read((char*) &this->margins, sizeof(this->margins));
-    data.read((char*) &this->lastMargins, sizeof(this->lastMargins));
-    data.read((char*) &this->palette, sizeof(this->palette));
-    data.read((char*) &this->exposure, sizeof(this->exposure));
-    data.read((char*) &this->numPrinted, sizeof(this->numPrinted));
-    data.read((char*) &this->nextUpdateCycle, sizeof(this->nextUpdateCycle));
-}
+void Printer::update() {
+    if(this->nextUpdateCycle != 0) {
+        if(this->gameboy->cpu.getCycle() >= this->nextUpdateCycle) {
+            this->nextUpdateCycle = 0;
 
-void Printer::saveState(std::ostream& data) {
-    data.write((char*) this->gfx, sizeof(this->gfx));
-    data.write((char*) &this->gfxIndex, sizeof(this->gfxIndex));
-    data.write((char*) &this->packetByte, sizeof(this->packetByte));
-    data.write((char*) &this->status, sizeof(this->status));
-    data.write((char*) &this->cmd, sizeof(this->cmd));
-    data.write((char*) &this->cmdLength, sizeof(this->cmdLength));
-    data.write((char*) &this->packetCompressed, sizeof(this->packetCompressed));
-    data.write((char*) &this->compressionByte, sizeof(this->compressionByte));
-    data.write((char*) &this->compressionLen, sizeof(this->compressionLen));
-    data.write((char*) &this->expectedChecksum, sizeof(this->expectedChecksum));
-    data.write((char*) &this->checksum, sizeof(this->checksum));
-    data.write((char*) &this->cmd2Index, sizeof(this->cmd2Index));
-    data.write((char*) &this->margins, sizeof(this->margins));
-    data.write((char*) &this->lastMargins, sizeof(this->lastMargins));
-    data.write((char*) &this->palette, sizeof(this->palette));
-    data.write((char*) &this->exposure, sizeof(this->exposure));
-    data.write((char*) &this->numPrinted, sizeof(this->numPrinted));
-    data.write((char*) &this->nextUpdateCycle, sizeof(this->nextUpdateCycle));
+            if(this->status & PRINTER_STATUS_PRINTING) {
+                this->status &= ~PRINTER_STATUS_PRINTING;
+            } else {
+                this->status |= PRINTER_STATUS_REQUESTED;
+                this->status |= PRINTER_STATUS_PRINTING;
+                this->status &= ~PRINTER_STATUS_READY;
+
+                // if "appending" is true, this image will be slapped onto the old one.
+                // Some games have a tendency to print an image in multiple goes.
+                bool appending = false;
+                if(this->lastMargins != -1 && (this->lastMargins & 0x0F) == 0 && (this->margins & 0xF0) == 0) {
+                    appending = true;
+                }
+
+                this->gameboy->settings.printImage(appending, this->gfx, this->gfxIndex, this->palette);
+                this->gfxIndex = 0;
+
+                // PRINTER_STATUS_PRINTING will be unset after this many frames
+                int height = this->gfxIndex / PRINTER_WIDTH * 4;
+                this->nextUpdateCycle = this->gameboy->cpu.getCycle() + ((height != 0 ? height : 1) * CYCLES_PER_FRAME);
+                this->gameboy->cpu.setEventCycle(this->nextUpdateCycle);
+            }
+        } else {
+            this->gameboy->cpu.setEventCycle(this->nextUpdateCycle);
+        }
+    }
 }
 
 u8 Printer::link(u8 val) {
@@ -166,7 +157,7 @@ u8 Printer::link(u8 val) {
         case 10: { // Status
             if(this->checksum != this->expectedChecksum) {
                 this->status |= PRINTER_STATUS_CHECKSUM;
-                if(this->gameboy->settings.printDebug != NULL) {
+                if(this->gameboy->settings.printDebug != nullptr) {
                     this->gameboy->settings.printDebug("Printer Error: Checksum %.4x, Expected %.4x\n", this->checksum, this->expectedChecksum);
                 }
             } else {
@@ -181,8 +172,8 @@ u8 Printer::link(u8 val) {
                     memset(this->gfx, 0, sizeof(this->gfx));
                     break;
                 case 2: // Start printing (after a short delay)
-                    this->nextUpdateCycle = this->gameboy->cpu->getCycle() + CYCLES_PER_FRAME;
-                    this->gameboy->cpu->setEventCycle(this->nextUpdateCycle);
+                    this->nextUpdateCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_FRAME;
+                    this->gameboy->cpu.setEventCycle(this->nextUpdateCycle);
                     break;
                 case 4: // Fill buffer
                     // Data has been read, nothing more to do
@@ -210,37 +201,48 @@ u8 Printer::link(u8 val) {
     return 0;
 }
 
-void Printer::update() {
-    if(this->nextUpdateCycle != 0) {
-        if(this->gameboy->cpu->getCycle() >= this->nextUpdateCycle) {
-            this->nextUpdateCycle = 0;
+std::istream& operator>>(std::istream& is, Printer& printer) {
+    is.read((char*) printer.gfx, sizeof(printer.gfx));
+    is.read((char*) &printer.gfxIndex, sizeof(printer.gfxIndex));
+    is.read((char*) &printer.packetByte, sizeof(printer.packetByte));
+    is.read((char*) &printer.status, sizeof(printer.status));
+    is.read((char*) &printer.cmd, sizeof(printer.cmd));
+    is.read((char*) &printer.cmdLength, sizeof(printer.cmdLength));
+    is.read((char*) &printer.packetCompressed, sizeof(printer.packetCompressed));
+    is.read((char*) &printer.compressionByte, sizeof(printer.compressionByte));
+    is.read((char*) &printer.compressionLen, sizeof(printer.compressionLen));
+    is.read((char*) &printer.expectedChecksum, sizeof(printer.expectedChecksum));
+    is.read((char*) &printer.checksum, sizeof(printer.checksum));
+    is.read((char*) &printer.cmd2Index, sizeof(printer.cmd2Index));
+    is.read((char*) &printer.margins, sizeof(printer.margins));
+    is.read((char*) &printer.lastMargins, sizeof(printer.lastMargins));
+    is.read((char*) &printer.palette, sizeof(printer.palette));
+    is.read((char*) &printer.exposure, sizeof(printer.exposure));
+    is.read((char*) &printer.nextUpdateCycle, sizeof(printer.nextUpdateCycle));
 
-            if(this->status & PRINTER_STATUS_PRINTING) {
-                this->status &= ~PRINTER_STATUS_PRINTING;
-            } else {
-                this->status |= PRINTER_STATUS_REQUESTED;
-                this->status |= PRINTER_STATUS_PRINTING;
-                this->status &= ~PRINTER_STATUS_READY;
+    return is;
+}
 
-                // if "appending" is true, this image will be slapped onto the old one.
-                // Some games have a tendency to print an image in multiple goes.
-                bool appending = false;
-                if(this->lastMargins != -1 && (this->lastMargins & 0x0F) == 0 && (this->margins & 0xF0) == 0) {
-                    appending = true;
-                }
+std::ostream& operator<<(std::ostream& os, const Printer& printer) {
+    os.write((char*) printer.gfx, sizeof(printer.gfx));
+    os.write((char*) &printer.gfxIndex, sizeof(printer.gfxIndex));
+    os.write((char*) &printer.packetByte, sizeof(printer.packetByte));
+    os.write((char*) &printer.status, sizeof(printer.status));
+    os.write((char*) &printer.cmd, sizeof(printer.cmd));
+    os.write((char*) &printer.cmdLength, sizeof(printer.cmdLength));
+    os.write((char*) &printer.packetCompressed, sizeof(printer.packetCompressed));
+    os.write((char*) &printer.compressionByte, sizeof(printer.compressionByte));
+    os.write((char*) &printer.compressionLen, sizeof(printer.compressionLen));
+    os.write((char*) &printer.expectedChecksum, sizeof(printer.expectedChecksum));
+    os.write((char*) &printer.checksum, sizeof(printer.checksum));
+    os.write((char*) &printer.cmd2Index, sizeof(printer.cmd2Index));
+    os.write((char*) &printer.margins, sizeof(printer.margins));
+    os.write((char*) &printer.lastMargins, sizeof(printer.lastMargins));
+    os.write((char*) &printer.palette, sizeof(printer.palette));
+    os.write((char*) &printer.exposure, sizeof(printer.exposure));
+    os.write((char*) &printer.nextUpdateCycle, sizeof(printer.nextUpdateCycle));
 
-                this->gameboy->settings.printImage(appending, this->gfx, this->gfxIndex, this->palette);
-                this->gfxIndex = 0;
-
-                // PRINTER_STATUS_PRINTING will be unset after this many frames
-                int height = this->gfxIndex / PRINTER_WIDTH * 4;
-                this->nextUpdateCycle = this->gameboy->cpu->getCycle() + ((height != 0 ? height : 1) * CYCLES_PER_FRAME);
-                this->gameboy->cpu->setEventCycle(this->nextUpdateCycle);
-            }
-        } else {
-            this->gameboy->cpu->setEventCycle(this->nextUpdateCycle);
-        }
-    }
+    return os;
 }
 
 void Printer::processBodyData(u8 dat) {

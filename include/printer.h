@@ -1,8 +1,5 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
 
 #define PRINTER_WIDTH 160
@@ -15,22 +12,21 @@ public:
     Printer(Gameboy* gb);
 
     void reset();
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     void update();
 
     u8 link(u8 val);
+
+    friend std::istream& operator>>(std::istream& is, Printer& printer);
+    friend std::ostream& operator<<(std::ostream& os, const Printer& printer);
 private:
     void processBodyData(u8 dat);
 
     Gameboy* gameboy;
 
     u8 gfx[PRINTER_WIDTH * PRINTER_HEIGHT / 4];
-    int gfxIndex;
+    u16 gfxIndex;
 
-    int packetByte;
+    u8 packetByte;
     u8 status;
     u8 cmd;
     u16 cmdLength;
@@ -43,12 +39,10 @@ private:
     u16 checksum;
 
     u8 cmd2Index;
-    int margins;
-    int lastMargins; // it's an int so that it can have a "nonexistant" value ("never set").
+    s16 margins; // -1 = never set
+    s16 lastMargins; // -1 = never set
     u8 palette;
     u8 exposure; // Ignored
-
-    int numPrinted; // Corresponds to the number after the filename
 
     u64 nextUpdateCycle;
 };

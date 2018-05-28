@@ -1,45 +1,77 @@
-#include <string.h>
-
-#include "platform/common/cheatengine.h"
 #include "platform/common/menu/cheatmenu.h"
-#include "platform/common/manager.h"
 #include "platform/common/menu/menu.h"
+#include "platform/common/cheatengine.h"
+#include "platform/common/manager.h"
 #include "platform/ui.h"
 
-int cheatsPerPage = 0;
-int cheatMenuSelection = 0;
-bool cheatMenuGameboyWasPaused = false;
+bool CheatsMenu::processInput(UIKey key, u32 width, u32 height) {
+    CheatEngine* cheatEngine = mgrGetCheatEngine();
+    u32 numCheats = cheatEngine->getNumCheats();
 
-void redrawCheatMenu() {
-    int height = 0;
-    uiGetSize(NULL, &height);
+    if(key == UI_KEY_UP) {
+        if(selection > 0) {
+            selection--;
 
+            return true;
+        }
+    } else if(key == UI_KEY_DOWN) {
+        if(selection < numCheats - 1) {
+            selection++;
+
+            return true;
+        }
+    } else if(key == UI_KEY_RIGHT || key == UI_KEY_LEFT) {
+        cheatEngine->toggleCheat(selection, !cheatEngine->isCheatEnabled(selection));
+
+        return true;
+    } else if(key == UI_KEY_R) {
+        selection += cheatsPerPage;
+        if(selection >= numCheats) {
+            selection = 0;
+        }
+
+        return true;
+    } else if(key == UI_KEY_L) {
+        selection -= cheatsPerPage;
+        if(selection < 0) {
+            selection = numCheats - 1;
+        }
+
+        return true;
+    } else if(key == UI_KEY_B) {
+        menuPop();
+    }
+
+    return false;
+}
+
+void CheatsMenu::draw(u32 width, u32 height) {
     cheatsPerPage = height - 2;
 
-    int numCheats = cheatEngine->getNumCheats();
-    int numPages = (numCheats - 1) / cheatsPerPage + 1;
-    int page = cheatMenuSelection / cheatsPerPage;
+    CheatEngine* cheatEngine = mgrGetCheatEngine();
 
-    uiClear();
+    u32 numCheats = cheatEngine->getNumCheats();
+    u32 numPages = numCheats > 0 ? (numCheats - 1) / cheatsPerPage + 1 : 0;
+    u32 page = selection / cheatsPerPage;
 
     uiPrint("          Cheat Menu      ");
-    uiPrint("%d/%d\n\n", page + 1, numPages);
-    for(int i = page * cheatsPerPage; i < numCheats && i < (page + 1) * cheatsPerPage; i++) {
-        if(cheatMenuSelection == i) {
+    uiPrint("%" PRIu32 "/%" PRIu32 "\n\n", page + 1, numPages);
+    for(u32 i = page * cheatsPerPage; i < numCheats && i < (page + 1) * cheatsPerPage; i++) {
+        if(selection == i) {
             uiSetLineHighlighted(true);
         }
 
-        const std::string& name = cheatEngine->getCheatName(i);
+        const std::string name = cheatEngine->getCheatName(i);
 
         uiPrint("%s", name.c_str());
 
         size_t nameLen = name.length();
-        for(unsigned int j = 0; j < 25 - nameLen; j++) {
+        for(u32 j = 0; j < 25 - nameLen; j++) {
             uiPrint(" ");
         }
 
         if(cheatEngine->isCheatEnabled(i)) {
-            if(cheatMenuSelection == i) {
+            if(selection == i) {
                 uiSetTextColor(TEXT_COLOR_YELLOW);
                 uiPrint("* ");
                 uiSetTextColor(TEXT_COLOR_GREEN);
@@ -53,7 +85,7 @@ void redrawCheatMenu() {
                 uiSetTextColor(TEXT_COLOR_NONE);
             }
         } else {
-            if(cheatMenuSelection == i) {
+            if(selection == i) {
                 uiSetTextColor(TEXT_COLOR_YELLOW);
                 uiPrint("* ");
                 uiSetTextColor(TEXT_COLOR_RED);
@@ -72,66 +104,4 @@ void redrawCheatMenu() {
 
         uiSetLineHighlighted(false);
     }
-
-    uiFlush();
-}
-
-void updateCheatMenu() {
-    bool redraw = false;
-    int numCheats = cheatEngine->getNumCheats();
-
-    if(cheatMenuSelection >= numCheats) {
-        cheatMenuSelection = 0;
-    }
-
-    UIKey key;
-    while((key = uiReadKey()) != UI_KEY_NONE) {
-        if(key == UI_KEY_UP) {
-            if(cheatMenuSelection > 0) {
-                cheatMenuSelection--;
-                redraw = true;
-            }
-        } else if(key == UI_KEY_DOWN) {
-            if(cheatMenuSelection < numCheats - 1) {
-                cheatMenuSelection++;
-                redraw = true;
-            }
-        } else if(key == UI_KEY_RIGHT || key == UI_KEY_LEFT) {
-            cheatEngine->toggleCheat(cheatMenuSelection, !cheatEngine->isCheatEnabled(cheatMenuSelection));
-            redraw = true;
-        } else if(key == UI_KEY_R) {
-            cheatMenuSelection += cheatsPerPage;
-            if(cheatMenuSelection >= numCheats) {
-                cheatMenuSelection = 0;
-            }
-
-            redraw = true;
-        } else if(key == UI_KEY_L) {
-            cheatMenuSelection -= cheatsPerPage;
-            if(cheatMenuSelection < 0) {
-                cheatMenuSelection = numCheats - 1;
-            }
-
-            redraw = true;
-        } else if(key == UI_KEY_B) {
-            closeSubMenu();
-            if(!cheatMenuGameboyWasPaused) {
-                mgrUnpause();
-            }
-
-            return;
-        }
-    }
-
-    if(redraw) {
-        redrawCheatMenu();
-    }
-}
-
-void startCheatMenu() {
-    cheatMenuGameboyWasPaused = mgrIsPaused();
-    mgrPause();
-
-    displaySubMenu(updateCheatMenu);
-    redrawCheatMenu();
 }

@@ -1,33 +1,28 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
 
-class Gameboy;
+#include "gb_apu/Gb_Apu.h"
+#include "gb_apu/Multi_Buffer.h"
 
-class Gb_Apu;
-class Stereo_Buffer;
+class Gameboy;
 
 class APU {
 public:
     APU(Gameboy* gameboy);
-    ~APU();
 
     void reset();
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     void update();
 
     void setHalfSpeed(bool halfSpeed);
+
+    friend std::istream& operator>>(std::istream& is, APU& apu);
+    friend std::ostream& operator<<(std::ostream& os, APU& apu);
 private:
     Gameboy* gameboy;
 
-    Stereo_Buffer* buffer = NULL;
-    Gb_Apu* apu = NULL;
+    Stereo_Buffer buffer;
+    Gb_Apu apu;
 
     u64 lastSoundCycle;
     bool halfSpeed;

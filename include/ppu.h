@@ -1,26 +1,30 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
 
 class Gameboy;
+
+#define GB_FRAME_WIDTH 256
+#define GB_FRAME_HEIGHT 224
+
+#define GB_SCREEN_X 48
+#define GB_SCREEN_Y 40
+#define GB_SCREEN_WIDTH 160
+#define GB_SCREEN_HEIGHT 144
 
 class PPU {
 public:
     PPU(Gameboy* gb);
 
     void reset();
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     void update();
 
     void setHalfSpeed(bool halfSpeed);
 
     void transferTiles(u8* dest);
+
+    friend std::istream& operator>>(std::istream& is, PPU& ppu);
+    friend std::ostream& operator<<(std::ostream& os, const PPU& ppu);
 
     inline u8 readOam(u16 addr) {
         return this->oam[addr & 0xFF];

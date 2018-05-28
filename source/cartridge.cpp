@@ -1,29 +1,41 @@
-#include <string.h>
-#include <time.h>
-
 #include <algorithm>
+#include <cstring>
+#include <ctime>
+#include <istream>
+#include <ostream>
 
 #include "cpu.h"
 #include "gameboy.h"
 #include "cartridge.h"
 #include "mmu.h"
 
-Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData, int saveSize) {
+#define HALF_ROM_BANK_SIZE 0x2000
+
+#define SRAM_BANK_SIZE 0x2000
+#define SRAM_BANK_MASK 0x1FFF
+
+#define HALF_SRAM_BANK_SIZE 0x1000
+#define HALF_SRAM_BANK_MASK 0x0FFF
+
+Cartridge::Cartridge(std::istream& romData, u32 romSize, std::istream& saveData) {
+    this->totalRomBanks = (romSize + ROM_BANK_SIZE - 1) >> 14;
+
     // Round number of banks to next power of two.
-    this->totalRomBanks = (romSize + 0x3FFF) / 0x4000;
-    this->totalRomBanks--;
-    this->totalRomBanks |= this->totalRomBanks >> 1;
-    this->totalRomBanks |= this->totalRomBanks >> 2;
-    this->totalRomBanks |= this->totalRomBanks >> 4;
-    this->totalRomBanks |= this->totalRomBanks >> 8;
-    this->totalRomBanks |= this->totalRomBanks >> 16;
-    this->totalRomBanks++;
+    if(this->totalRomBanks > 0) {
+        this->totalRomBanks--;
+        this->totalRomBanks |= this->totalRomBanks >> 1;
+        this->totalRomBanks |= this->totalRomBanks >> 2;
+        this->totalRomBanks |= this->totalRomBanks >> 4;
+        this->totalRomBanks |= this->totalRomBanks >> 8;
+        this->totalRomBanks |= this->totalRomBanks >> 16;
+        this->totalRomBanks++;
+    }
 
     if(this->totalRomBanks < 2) {
         this->totalRomBanks = 2;
     }
 
-    size_t roundedSize = (size_t) (this->totalRomBanks * 0x4000);
+    size_t roundedSize = (size_t) (this->totalRomBanks * ROM_BANK_SIZE);
 
     this->rom = new u8[roundedSize]();
     romData.read((char*) this->rom, romSize);
@@ -50,7 +62,7 @@ Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData,
                 memcpy(this->rom, &copy[roundedSize - 0x8000], 0x8000);
                 memcpy(&this->rom[0x8000], copy, roundedSize - 0x8000);
 
-                delete copy;
+                delete[] copy;
             }
         }
     }
@@ -89,13 +101,11 @@ Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData,
         case 0x19:
         case 0x1A:
         case 0x1B:
-            this->mbcType = MBC5;
-            break;
         case 0x1C:
         case 0x1D:
         case 0x1E:
             this->mbcType = MBC5;
-            this->rumble = true;
+            this->rumble = this->getRawMBC() >= 0x1C;
             break;
         case 0x20:
             this->mbcType = MBC6;
@@ -119,7 +129,7 @@ Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData,
             this->mbcType = HUC1;
             break;
         default:
-            if(this->gameboy->settings.printDebug != NULL) {
+            if(this->gameboy->settings.printDebug != nullptr) {
                 this->gameboy->settings.printDebug("Unsupported mapper value %02x\n", this->rom[0x0147]);
             }
 
@@ -148,8 +158,11 @@ Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData,
             case 4:
                 this->totalRamBanks = 16;
                 break;
+            case 5:
+                this->totalRamBanks = 8;
+                break;
             default:
-                if(this->gameboy->settings.printDebug != NULL) {
+                if(this->gameboy->settings.printDebug != nullptr) {
                     this->gameboy->settings.printDebug("Invalid RAM bank number: %x\nDefaulting to 4 banks.\n", this->getRawRamSize());
                 }
 
@@ -158,8 +171,8 @@ Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData,
         }
     }
 
-    this->sram = new u8[this->totalRamBanks * 0x2000]();
-    saveData.read((char*) this->sram, this->totalRamBanks * 0x2000);
+    this->sram = new u8[this->totalRamBanks * SRAM_BANK_SIZE]();
+    saveData.read((char*) this->sram, this->totalRamBanks * SRAM_BANK_SIZE);
 
     if(this->mbcType == MBC3 || this->mbcType == HUC3 || this->mbcType == TAMA5) {
         saveData.read((char*) &this->rtcClock, sizeof(this->rtcClock));
@@ -169,43 +182,43 @@ Cartridge::Cartridge(std::istream& romData, int romSize, std::istream& saveData,
 }
 
 Cartridge::~Cartridge() {
-    if(this->gameboy != NULL) {
-        this->gameboy->mmu->mapBankBlock(0x0, NULL);
-        this->gameboy->mmu->mapBankBlock(0x1, NULL);
-        this->gameboy->mmu->mapBankBlock(0x2, NULL);
-        this->gameboy->mmu->mapBankBlock(0x3, NULL);
-        this->gameboy->mmu->mapBankBlock(0x4, NULL);
-        this->gameboy->mmu->mapBankBlock(0x5, NULL);
-        this->gameboy->mmu->mapBankBlock(0x6, NULL);
-        this->gameboy->mmu->mapBankBlock(0x7, NULL);
-        this->gameboy->mmu->mapBankBlock(0xA, NULL);
-        this->gameboy->mmu->mapBankBlock(0xB, NULL);
+    if(this->gameboy != nullptr) {
+        this->gameboy->mmu.mapBankBlock(0x0, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x1, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x2, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x3, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x4, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x5, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x6, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x7, nullptr);
+        this->gameboy->mmu.mapBankBlock(0xA, nullptr);
+        this->gameboy->mmu.mapBankBlock(0xB, nullptr);
 
-        this->gameboy->mmu->mapBankReadFunc(0xA, NULL);
-        this->gameboy->mmu->mapBankReadFunc(0xB, NULL);
+        this->gameboy->mmu.mapBankReadFunc(0xA, nullptr);
+        this->gameboy->mmu.mapBankReadFunc(0xB, nullptr);
 
-        this->gameboy->mmu->mapBankWriteFunc(0x0, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x1, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x2, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x3, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x4, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x5, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x6, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0x7, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0xA, NULL);
-        this->gameboy->mmu->mapBankWriteFunc(0xB, NULL);
+        this->gameboy->mmu.mapBankWriteFunc(0x0, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x1, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x2, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x3, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x4, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x5, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x6, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0x7, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0xA, nullptr);
+        this->gameboy->mmu.mapBankWriteFunc(0xB, nullptr);
 
-        this->gameboy = NULL;
+        this->gameboy = nullptr;
     }
 
-    if(this->rom != NULL) {
-        delete this->rom;
-        this->rom = NULL;
+    if(this->rom != nullptr) {
+        delete[] this->rom;
+        this->rom = nullptr;
     }
 
-    if(this->sram != NULL) {
-        delete this->sram;
-        this->sram = NULL;
+    if(this->sram != nullptr) {
+        delete[] this->sram;
+        this->sram = nullptr;
     }
 }
 
@@ -225,10 +238,10 @@ void Cartridge::reset(Gameboy* gameboy) {
     this->mbc3Ctrl = 0;
 
     // MBC6
-    this->mbc6RomBank1ALatch = 2;
-    this->mbc6RomBank1BLatch = 3;
     this->mbc6RomBank1A = 2;
     this->mbc6RomBank1B = 3;
+    this->mbc6SramBankA = 0;
+    this->mbc6SramBankB = 1;
 
     // MBC7
     this->mbc7WriteEnable = false;
@@ -267,143 +280,147 @@ void Cartridge::reset(Gameboy* gameboy) {
     this->mapBanks();
 }
 
-void Cartridge::loadState(std::istream& data, u8 version) {
-    data.read((char*) &this->romBank0, sizeof(this->romBank0));
-    data.read((char*) &this->romBank1, sizeof(this->romBank1));
-    data.read((char*) &this->sramBank, sizeof(this->sramBank));
-    data.read((char*) &this->sramEnabled, sizeof(this->sramEnabled));
-
-    switch(this->mbcType) {
-        case MBC1:
-            data.read((char*) &this->mbc1RamMode, sizeof(this->mbc1RamMode));
-            break;
-        case MBC3:
-            data.read((char*) &this->mbc3Ctrl, sizeof(this->mbc3Ctrl));
-            break;
-        case MBC6:
-            data.read((char*) &this->mbc6RomBank1ALatch, sizeof(this->mbc6RomBank1ALatch));
-            data.read((char*) &this->mbc6RomBank1BLatch, sizeof(this->mbc6RomBank1BLatch));
-            data.read((char*) &this->mbc6RomBank1A, sizeof(this->mbc6RomBank1A));
-            data.read((char*) &this->mbc6RomBank1B, sizeof(this->mbc6RomBank1B));
-            break;
-        case MBC7:
-            data.read((char*) &this->mbc7WriteEnable, sizeof(this->mbc7WriteEnable));
-            data.read((char*) &this->mbc7Cs, sizeof(this->mbc7Cs));
-            data.read((char*) &this->mbc7Sk, sizeof(this->mbc7Sk));
-            data.read((char*) &this->mbc7OpCode, sizeof(this->mbc7OpCode));
-            data.read((char*) &this->mbc7Addr, sizeof(this->mbc7Addr));
-            data.read((char*) &this->mbc7Count, sizeof(this->mbc7Count));
-            data.read((char*) &this->mbc7State, sizeof(this->mbc7State));
-            data.read((char*) &this->mbc7Buffer, sizeof(this->mbc7Buffer));
-            data.read((char*) &this->mbc7RA, sizeof(this->mbc7RA));
-            break;
-        case HUC1:
-            data.read((char*) &this->huc1RamMode, sizeof(this->huc1RamMode));
-            break;
-        case HUC3:
-            data.read((char*) &this->huc3Mode, sizeof(this->huc3Mode));
-            data.read((char*) &this->huc3Value, sizeof(this->huc3Value));
-            data.read((char*) &this->huc3Shift, sizeof(this->huc3Shift));
-            break;
-        case MMM01:
-            data.read((char*) &this->mmm01BankSelected, sizeof(this->mmm01BankSelected));
-            data.read((char*) &this->mmm01RomBaseBank, sizeof(this->mmm01RomBaseBank));
-            break;
-        case CAMERA:
-            data.read((char*) &this->cameraIO, sizeof(this->cameraIO));
-            data.read((char*) &this->cameraReadyCycle, sizeof(this->cameraReadyCycle));
-            data.read((char*) this->cameraRegs, sizeof(this->cameraRegs));
-            break;
-        case TAMA5:
-            data.read((char*) &this->tama5CommandNumber, sizeof(this->tama5CommandNumber));
-            data.read((char*) &this->tama5RamByteSelect, sizeof(this->tama5RamByteSelect));
-            data.read((char*) this->tama5Commands, sizeof(this->tama5Commands));
-            data.read((char*) this->tama5RAM, sizeof(this->tama5RAM));
-        default:
-            break;
-    }
-
-    this->mapBanks();
-}
-
-void Cartridge::saveState(std::ostream& data) {
-    data.write((char*) &this->romBank0, sizeof(this->romBank0));
-    data.write((char*) &this->romBank1, sizeof(this->romBank1));
-    data.write((char*) &this->sramBank, sizeof(this->sramBank));
-    data.write((char*) &this->sramEnabled, sizeof(this->sramEnabled));
-
-    switch(this->mbcType) {
-        case MBC1:
-            data.write((char*) &this->mbc1RamMode, sizeof(this->mbc1RamMode));
-            break;
-        case MBC3:
-            data.write((char*) &this->mbc3Ctrl, sizeof(this->mbc3Ctrl));
-            break;
-        case MBC6:
-            data.write((char*) &this->mbc6RomBank1ALatch, sizeof(this->mbc6RomBank1ALatch));
-            data.write((char*) &this->mbc6RomBank1BLatch, sizeof(this->mbc6RomBank1BLatch));
-            data.write((char*) &this->mbc6RomBank1A, sizeof(this->mbc6RomBank1A));
-            data.write((char*) &this->mbc6RomBank1B, sizeof(this->mbc6RomBank1B));
-            break;
-        case MBC7:
-            data.write((char*) &this->mbc7WriteEnable, sizeof(this->mbc7WriteEnable));
-            data.write((char*) &this->mbc7Cs, sizeof(this->mbc7Cs));
-            data.write((char*) &this->mbc7Sk, sizeof(this->mbc7Sk));
-            data.write((char*) &this->mbc7OpCode, sizeof(this->mbc7OpCode));
-            data.write((char*) &this->mbc7Addr, sizeof(this->mbc7Addr));
-            data.write((char*) &this->mbc7Count, sizeof(this->mbc7Count));
-            data.write((char*) &this->mbc7State, sizeof(this->mbc7State));
-            data.write((char*) &this->mbc7Buffer, sizeof(this->mbc7Buffer));
-            data.write((char*) &this->mbc7RA, sizeof(this->mbc7RA));
-            break;
-        case HUC1:
-            data.write((char*) &this->huc1RamMode, sizeof(this->huc1RamMode));
-            break;
-        case HUC3:
-            data.write((char*) &this->huc3Mode, sizeof(this->huc3Mode));
-            data.write((char*) &this->huc3Value, sizeof(this->huc3Value));
-            data.write((char*) &this->huc3Shift, sizeof(this->huc3Shift));
-            break;
-        case MMM01:
-            data.write((char*) &this->mmm01BankSelected, sizeof(this->mmm01BankSelected));
-            data.write((char*) &this->mmm01RomBaseBank, sizeof(this->mmm01RomBaseBank));
-            break;
-        case CAMERA:
-            data.write((char*) &this->cameraIO, sizeof(this->cameraIO));
-            data.write((char*) &this->cameraReadyCycle, sizeof(this->cameraReadyCycle));
-            data.write((char*) this->cameraRegs, sizeof(this->cameraRegs));
-            break;
-        case TAMA5:
-            data.write((char*) &this->tama5CommandNumber, sizeof(this->tama5CommandNumber));
-            data.write((char*) &this->tama5RamByteSelect, sizeof(this->tama5RamByteSelect));
-            data.write((char*) this->tama5Commands, sizeof(this->tama5Commands));
-            data.write((char*) this->tama5RAM, sizeof(this->tama5RAM));
-        default:
-            break;
-    }
-}
-
 void Cartridge::update() {
-    if(this->updateFunc != NULL) {
+    if(this->updateFunc != nullptr) {
         (this->*updateFunc)();
     }
 }
 
 void Cartridge::save(std::ostream& data) {
-    data.write((char*) this->sram, this->totalRamBanks * 0x2000);
+    data.write((char*) this->sram, this->totalRamBanks * SRAM_BANK_SIZE);
 
     if(this->mbcType == MBC3 || this->mbcType == HUC3 || this->mbcType == TAMA5) {
         data.write((char*) &this->rtcClock, sizeof(this->rtcClock));
     }
 }
 
+std::istream& operator>>(std::istream& is, Cartridge& cart) {
+    is.read((char*) &cart.romBank0, sizeof(cart.romBank0));
+    is.read((char*) &cart.romBank1, sizeof(cart.romBank1));
+    is.read((char*) &cart.sramBank, sizeof(cart.sramBank));
+    is.read((char*) &cart.sramEnabled, sizeof(cart.sramEnabled));
+
+    switch(cart.mbcType) {
+        case MBC1:
+            is.read((char*) &cart.mbc1RamMode, sizeof(cart.mbc1RamMode));
+            break;
+        case MBC3:
+            is.read((char*) &cart.mbc3Ctrl, sizeof(cart.mbc3Ctrl));
+            break;
+        case MBC6:
+            is.read((char*) &cart.mbc6RomBank1A, sizeof(cart.mbc6RomBank1A));
+            is.read((char*) &cart.mbc6RomBank1B, sizeof(cart.mbc6RomBank1B));
+            is.read((char*) &cart.mbc6SramBankA, sizeof(cart.mbc6SramBankA));
+            is.read((char*) &cart.mbc6SramBankB, sizeof(cart.mbc6SramBankB));
+            break;
+        case MBC7:
+            is.read((char*) &cart.mbc7WriteEnable, sizeof(cart.mbc7WriteEnable));
+            is.read((char*) &cart.mbc7Cs, sizeof(cart.mbc7Cs));
+            is.read((char*) &cart.mbc7Sk, sizeof(cart.mbc7Sk));
+            is.read((char*) &cart.mbc7OpCode, sizeof(cart.mbc7OpCode));
+            is.read((char*) &cart.mbc7Addr, sizeof(cart.mbc7Addr));
+            is.read((char*) &cart.mbc7Count, sizeof(cart.mbc7Count));
+            is.read((char*) &cart.mbc7State, sizeof(cart.mbc7State));
+            is.read((char*) &cart.mbc7Buffer, sizeof(cart.mbc7Buffer));
+            is.read((char*) &cart.mbc7RA, sizeof(cart.mbc7RA));
+            break;
+        case HUC1:
+            is.read((char*) &cart.huc1RamMode, sizeof(cart.huc1RamMode));
+            break;
+        case HUC3:
+            is.read((char*) &cart.huc3Mode, sizeof(cart.huc3Mode));
+            is.read((char*) &cart.huc3Value, sizeof(cart.huc3Value));
+            is.read((char*) &cart.huc3Shift, sizeof(cart.huc3Shift));
+            break;
+        case MMM01:
+            is.read((char*) &cart.mmm01BankSelected, sizeof(cart.mmm01BankSelected));
+            is.read((char*) &cart.mmm01RomBaseBank, sizeof(cart.mmm01RomBaseBank));
+            break;
+        case CAMERA:
+            is.read((char*) &cart.cameraIO, sizeof(cart.cameraIO));
+            is.read((char*) &cart.cameraReadyCycle, sizeof(cart.cameraReadyCycle));
+            is.read((char*) cart.cameraRegs, sizeof(cart.cameraRegs));
+            break;
+        case TAMA5:
+            is.read((char*) &cart.tama5CommandNumber, sizeof(cart.tama5CommandNumber));
+            is.read((char*) &cart.tama5RamByteSelect, sizeof(cart.tama5RamByteSelect));
+            is.read((char*) cart.tama5Commands, sizeof(cart.tama5Commands));
+            is.read((char*) cart.tama5RAM, sizeof(cart.tama5RAM));
+        default:
+            break;
+    }
+
+    cart.mapBanks();
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const Cartridge& cart) {
+    os.write((char*) &cart.romBank0, sizeof(cart.romBank0));
+    os.write((char*) &cart.romBank1, sizeof(cart.romBank1));
+    os.write((char*) &cart.sramBank, sizeof(cart.sramBank));
+    os.write((char*) &cart.sramEnabled, sizeof(cart.sramEnabled));
+
+    switch(cart.mbcType) {
+        case MBC1:
+            os.write((char*) &cart.mbc1RamMode, sizeof(cart.mbc1RamMode));
+            break;
+        case MBC3:
+            os.write((char*) &cart.mbc3Ctrl, sizeof(cart.mbc3Ctrl));
+            break;
+        case MBC6:
+            os.write((char*) &cart.mbc6RomBank1A, sizeof(cart.mbc6RomBank1A));
+            os.write((char*) &cart.mbc6RomBank1B, sizeof(cart.mbc6RomBank1B));
+            os.write((char*) &cart.mbc6SramBankA, sizeof(cart.mbc6SramBankA));
+            os.write((char*) &cart.mbc6SramBankB, sizeof(cart.mbc6SramBankB));
+            break;
+        case MBC7:
+            os.write((char*) &cart.mbc7WriteEnable, sizeof(cart.mbc7WriteEnable));
+            os.write((char*) &cart.mbc7Cs, sizeof(cart.mbc7Cs));
+            os.write((char*) &cart.mbc7Sk, sizeof(cart.mbc7Sk));
+            os.write((char*) &cart.mbc7OpCode, sizeof(cart.mbc7OpCode));
+            os.write((char*) &cart.mbc7Addr, sizeof(cart.mbc7Addr));
+            os.write((char*) &cart.mbc7Count, sizeof(cart.mbc7Count));
+            os.write((char*) &cart.mbc7State, sizeof(cart.mbc7State));
+            os.write((char*) &cart.mbc7Buffer, sizeof(cart.mbc7Buffer));
+            os.write((char*) &cart.mbc7RA, sizeof(cart.mbc7RA));
+            break;
+        case HUC1:
+            os.write((char*) &cart.huc1RamMode, sizeof(cart.huc1RamMode));
+            break;
+        case HUC3:
+            os.write((char*) &cart.huc3Mode, sizeof(cart.huc3Mode));
+            os.write((char*) &cart.huc3Value, sizeof(cart.huc3Value));
+            os.write((char*) &cart.huc3Shift, sizeof(cart.huc3Shift));
+            break;
+        case MMM01:
+            os.write((char*) &cart.mmm01BankSelected, sizeof(cart.mmm01BankSelected));
+            os.write((char*) &cart.mmm01RomBaseBank, sizeof(cart.mmm01RomBaseBank));
+            break;
+        case CAMERA:
+            os.write((char*) &cart.cameraIO, sizeof(cart.cameraIO));
+            os.write((char*) &cart.cameraReadyCycle, sizeof(cart.cameraReadyCycle));
+            os.write((char*) cart.cameraRegs, sizeof(cart.cameraRegs));
+            break;
+        case TAMA5:
+            os.write((char*) &cart.tama5CommandNumber, sizeof(cart.tama5CommandNumber));
+            os.write((char*) &cart.tama5RamByteSelect, sizeof(cart.tama5RamByteSelect));
+            os.write((char*) cart.tama5Commands, sizeof(cart.tama5Commands));
+            os.write((char*) cart.tama5RAM, sizeof(cart.tama5RAM));
+        default:
+            break;
+    }
+
+    return os;
+}
+
 u8 Cartridge::readSram(u16 addr) {
-    s32 bank = this->sramBank & (this->totalRamBanks - 1);
+    u8 bank = this->sramBank & (this->totalRamBanks - 1);
     if(bank >= 0 && bank < this->totalRamBanks) {
-        return this->sram[bank * 0x2000 + (addr & 0x1FFF)];
+        return this->sram[bank * SRAM_BANK_SIZE + (addr & SRAM_BANK_MASK)];
     } else {
-        if(this->gameboy->settings.printDebug != NULL) {
-            this->gameboy->settings.printDebug("Attempted to read from invalid SRAM bank: %d\n", bank);
+        if(this->gameboy->settings.printDebug != nullptr) {
+            this->gameboy->settings.printDebug("Attempted to read from invalid SRAM bank: %" PRIu32 "\n", bank);
         }
 
         return 0xFF;
@@ -411,105 +428,137 @@ u8 Cartridge::readSram(u16 addr) {
 }
 
 void Cartridge::writeSram(u16 addr, u8 val) {
-    s32 bank = this->sramBank & (this->totalRamBanks - 1);
+    u8 bank = this->sramBank & (this->totalRamBanks - 1);
     if(bank >= 0 && bank < this->totalRamBanks) {
-        this->sram[bank * 0x2000 + (addr & 0x1FFF)] = val;
+        this->sram[bank * SRAM_BANK_SIZE + (addr & SRAM_BANK_MASK)] = val;
     } else {
-        if(this->gameboy->settings.printDebug != NULL) {
-            this->gameboy->settings.printDebug("Attempted to write to invalid SRAM bank: %d\n", bank);
+        if(this->gameboy->settings.printDebug != nullptr) {
+            this->gameboy->settings.printDebug("Attempted to write to invalid SRAM bank: %" PRIu32 "\n", bank);
         }
     }
 }
 
 void Cartridge::mapRomBank0() {
-    s32 bank = this->romBank0 & (this->totalRomBanks - 1);
-    u8* bankPtr = this->getRomBank(bank);
-    if(bankPtr != NULL) {
-        this->gameboy->mmu->mapBankBlock(0x0, bankPtr + 0x0000);
-        this->gameboy->mmu->mapBankBlock(0x1, bankPtr + 0x1000);
-        this->gameboy->mmu->mapBankBlock(0x2, bankPtr + 0x2000);
-        this->gameboy->mmu->mapBankBlock(0x3, bankPtr + 0x3000);
+    u16 bank = this->romBank0 & (this->totalRomBanks - 1);
+    if(bank >= 0 && bank < this->totalRomBanks) {
+        u8* bankPtr = &this->rom[bank * ROM_BANK_SIZE];
+
+        this->gameboy->mmu.mapBankBlock(0x0, bankPtr + 0x0000);
+        this->gameboy->mmu.mapBankBlock(0x1, bankPtr + 0x1000);
+        this->gameboy->mmu.mapBankBlock(0x2, bankPtr + 0x2000);
+        this->gameboy->mmu.mapBankBlock(0x3, bankPtr + 0x3000);
     } else {
-        if(this->gameboy->settings.printDebug != NULL) {
-            this->gameboy->settings.printDebug("Attempted to access invalid ROM bank: %d\n", bank);
+        if(this->gameboy->settings.printDebug != nullptr) {
+            this->gameboy->settings.printDebug("Attempted to access invalid ROM bank: %" PRIu32 "\n", bank);
         }
 
-        this->gameboy->mmu->mapBankBlock(0x0, NULL);
-        this->gameboy->mmu->mapBankBlock(0x1, NULL);
-        this->gameboy->mmu->mapBankBlock(0x2, NULL);
-        this->gameboy->mmu->mapBankBlock(0x3, NULL);
+        this->gameboy->mmu.mapBankBlock(0x0, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x1, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x2, nullptr);
+        this->gameboy->mmu.mapBankBlock(0x3, nullptr);
     }
 }
 
 void Cartridge::mapRomBank1() {
     if(this->mbcType == MBC6) {
-        s32 bank1A = this->mbc6RomBank1A & ((this->totalRomBanks * 2) - 1);
-        u8* bankPtr1A = this->getRomBank(bank1A >> 1);
-        if(bankPtr1A != NULL) {
-            u8* subPtr = bankPtr1A + (bank1A & 0x1) * 0x2000;
+        u16 totalHalfBanks = this->totalRomBanks << 1;
 
-            this->gameboy->mmu->mapBankBlock(0x4, subPtr + 0x0000);
-            this->gameboy->mmu->mapBankBlock(0x5, subPtr + 0x1000);
+        u8 bank1A = this->mbc6RomBank1A & (totalHalfBanks - 1);
+        if(bank1A >= 0 && bank1A < totalHalfBanks) {
+            u8* bankPtr = &this->rom[bank1A * HALF_ROM_BANK_SIZE];
+
+            this->gameboy->mmu.mapBankBlock(0x4, bankPtr + 0x0000);
+            this->gameboy->mmu.mapBankBlock(0x5, bankPtr + 0x1000);
         } else {
-            if(this->gameboy->settings.printDebug != NULL) {
-                this->gameboy->settings.printDebug("Attempted to access invalid sub ROM bank: %d\n", bank1A);
+            if(this->gameboy->settings.printDebug != nullptr) {
+                this->gameboy->settings.printDebug("Attempted to access invalid ROM half-bank: %" PRIu32 "\n", bank1A);
             }
 
-            this->gameboy->mmu->mapBankBlock(0x4, NULL);
-            this->gameboy->mmu->mapBankBlock(0x5, NULL);
+            this->gameboy->mmu.mapBankBlock(0x4, nullptr);
+            this->gameboy->mmu.mapBankBlock(0x5, nullptr);
         }
 
-        s32 bank1B = this->mbc6RomBank1B & ((this->totalRomBanks * 2) - 1);
-        u8* bankPtr1B = this->getRomBank(bank1B >> 1);
-        if(bankPtr1B != NULL) {
-            u8* subPtr = bankPtr1B + (bank1B & 0x1) * 0x2000;
+        u8 bank1B = this->mbc6RomBank1B & (totalHalfBanks - 1);
+        if(bank1A >= 0 && bank1A < totalHalfBanks) {
+            u8* bankPtr = &this->rom[bank1B * HALF_ROM_BANK_SIZE];
 
-            this->gameboy->mmu->mapBankBlock(0x6, subPtr + 0x0000);
-            this->gameboy->mmu->mapBankBlock(0x7, subPtr + 0x1000);
+            this->gameboy->mmu.mapBankBlock(0x6, bankPtr + 0x0000);
+            this->gameboy->mmu.mapBankBlock(0x7, bankPtr + 0x1000);
         } else {
-            if(this->gameboy->settings.printDebug != NULL) {
-                this->gameboy->settings.printDebug("Attempted to access invalid sub ROM bank: %d\n", bank1B);
+            if(this->gameboy->settings.printDebug != nullptr) {
+                this->gameboy->settings.printDebug("Attempted to access invalid ROM half-bank: %" PRIu32 "\n", bank1B);
             }
 
-            this->gameboy->mmu->mapBankBlock(0x6, NULL);
-            this->gameboy->mmu->mapBankBlock(0x7, NULL);
+            this->gameboy->mmu.mapBankBlock(0x6, nullptr);
+            this->gameboy->mmu.mapBankBlock(0x7, nullptr);
         }
     } else {
-        s32 bank = this->romBank1 & (this->totalRomBanks - 1);
-        u8* bankPtr = this->getRomBank(bank);
-        if(bankPtr != NULL) {
-            this->gameboy->mmu->mapBankBlock(0x4, bankPtr + 0x0000);
-            this->gameboy->mmu->mapBankBlock(0x5, bankPtr + 0x1000);
-            this->gameboy->mmu->mapBankBlock(0x6, bankPtr + 0x2000);
-            this->gameboy->mmu->mapBankBlock(0x7, bankPtr + 0x3000);
+        u16 bank = this->romBank1 & (this->totalRomBanks - 1);
+        if(bank >= 0 && bank < this->totalRomBanks) {
+            u8* bankPtr = &this->rom[bank * ROM_BANK_SIZE];
+
+            this->gameboy->mmu.mapBankBlock(0x4, bankPtr + 0x0000);
+            this->gameboy->mmu.mapBankBlock(0x5, bankPtr + 0x1000);
+            this->gameboy->mmu.mapBankBlock(0x6, bankPtr + 0x2000);
+            this->gameboy->mmu.mapBankBlock(0x7, bankPtr + 0x3000);
         } else {
-            if(this->gameboy->settings.printDebug != NULL) {
-                this->gameboy->settings.printDebug("Attempted to access invalid ROM bank: %d\n", bank);
+            if(this->gameboy->settings.printDebug != nullptr) {
+                this->gameboy->settings.printDebug("Attempted to access invalid ROM bank: %" PRIu32 "\n", bank);
             }
 
-            this->gameboy->mmu->mapBankBlock(0x4, NULL);
-            this->gameboy->mmu->mapBankBlock(0x5, NULL);
-            this->gameboy->mmu->mapBankBlock(0x6, NULL);
-            this->gameboy->mmu->mapBankBlock(0x7, NULL);
+            this->gameboy->mmu.mapBankBlock(0x4, nullptr);
+            this->gameboy->mmu.mapBankBlock(0x5, nullptr);
+            this->gameboy->mmu.mapBankBlock(0x6, nullptr);
+            this->gameboy->mmu.mapBankBlock(0x7, nullptr);
         }
     }
 }
 
 void Cartridge::mapSramBank() {
-    s32 bank = this->sramBank & (this->totalRamBanks - 1);
-    if(bank >= 0 && bank < this->totalRamBanks) {
-        u8* bankPtr = &this->sram[bank * 0x2000];
+    if(this->mbcType == MBC6) {
+        u16 totalHalfBanks = this->totalRamBanks << 1;
 
-        this->gameboy->mmu->mapBankBlock(0xA, bankPtr + 0x0000);
-        this->gameboy->mmu->mapBankBlock(0xB, bankPtr + 0x1000);
-    } else {
-        // Only report if there's no chance it's a special bank number.
-        if(this->readFunc == NULL && this->gameboy->settings.printDebug != NULL) {
-            this->gameboy->settings.printDebug("Attempted to access invalid SRAM bank: %d\n", bank);
+        u8 bankA = this->mbc6SramBankA & (totalHalfBanks - 1);
+        if(bankA >= 0 && bankA < totalHalfBanks) {
+            u8* bankPtr = &this->sram[bankA * HALF_SRAM_BANK_SIZE];
+
+            this->gameboy->mmu.mapBankBlock(0xA, bankPtr);
+        } else {
+            if(this->gameboy->settings.printDebug != nullptr) {
+                this->gameboy->settings.printDebug("Attempted to access invalid SRAM half-bank: %" PRIu32 "\n", bankA);
+            }
+
+            this->gameboy->mmu.mapBankBlock(0xA, nullptr);
         }
 
-        this->gameboy->mmu->mapBankBlock(0xA, NULL);
-        this->gameboy->mmu->mapBankBlock(0xB, NULL);
+        u8 bankB = this->mbc6SramBankB & (totalHalfBanks - 1);
+        if(bankB >= 0 && bankB < totalHalfBanks) {
+            u8* bankPtr = &this->sram[bankA * HALF_SRAM_BANK_SIZE];
+
+            this->gameboy->mmu.mapBankBlock(0xB, bankPtr);
+        } else {
+            if(this->gameboy->settings.printDebug != nullptr) {
+                this->gameboy->settings.printDebug("Attempted to access invalid SRAM half-bank: %" PRIu32 "\n", bankB);
+            }
+
+            this->gameboy->mmu.mapBankBlock(0xB, nullptr);
+        }
+    } else {
+        u8 bank = this->sramBank & (this->totalRamBanks - 1);
+        if(bank >= 0 && bank < this->totalRamBanks) {
+            u8* bankPtr = &this->sram[bank * SRAM_BANK_SIZE];
+
+            this->gameboy->mmu.mapBankBlock(0xA, bankPtr + 0x0000);
+            this->gameboy->mmu.mapBankBlock(0xB, bankPtr + 0x1000);
+        } else {
+            // Only report if there's no chance it's a special bank number.
+            if(this->readFunc == nullptr && this->gameboy->settings.printDebug != nullptr) {
+                this->gameboy->settings.printDebug("Attempted to access invalid SRAM bank: %" PRIu32 "\n", bank);
+            }
+
+            this->gameboy->mmu.mapBankBlock(0xA, nullptr);
+            this->gameboy->mmu.mapBankBlock(0xB, nullptr);
+        }
     }
 }
 
@@ -520,33 +569,33 @@ void Cartridge::mapBanks() {
         this->mapSramBank();
     }
 
-    std::function<u8(u16 addr)> read = NULL;
-    if(this->readFunc != NULL) {
+    std::function<u8(u16 addr)> read = nullptr;
+    if(this->readFunc != nullptr) {
         read = [this](u16 addr) -> u8 {
             return (this->*readFunc)(addr);
         };
     }
 
-    this->gameboy->mmu->mapBankReadFunc(0xA, read);
-    this->gameboy->mmu->mapBankReadFunc(0xB, read);
+    this->gameboy->mmu.mapBankReadFunc(0xA, read);
+    this->gameboy->mmu.mapBankReadFunc(0xB, read);
 
-    std::function<void(u16 addr, u8 val)> write = NULL;
-    if(this->writeFunc != NULL) {
+    std::function<void(u16 addr, u8 val)> write = nullptr;
+    if(this->writeFunc != nullptr) {
         write = [this](u16 addr, u8 val) -> void {
             (this->*writeFunc)(addr, val);
         };
     }
 
-    this->gameboy->mmu->mapBankWriteFunc(0x0, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x1, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x2, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x3, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x4, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x5, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x6, write);
-    this->gameboy->mmu->mapBankWriteFunc(0x7, write);
-    this->gameboy->mmu->mapBankWriteFunc(0xA, write);
-    this->gameboy->mmu->mapBankWriteFunc(0xB, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x0, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x1, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x2, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x3, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x4, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x5, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x6, write);
+    this->gameboy->mmu.mapBankWriteFunc(0x7, write);
+    this->gameboy->mmu.mapBankWriteFunc(0xA, write);
+    this->gameboy->mmu.mapBankWriteFunc(0xB, write);
 }
 
 /* MBC read handlers */
@@ -554,7 +603,8 @@ void Cartridge::mapBanks() {
 /* MBC3 */
 u8 Cartridge::m3r(u16 addr) {
     if(this->sramEnabled) {
-        switch(this->sramBank) { // Check for RTC register
+        // Check for RTC register
+        switch(this->sramBank) {
             case 0x8:
                 return (u8) this->rtcClock.seconds;
             case 0x9:
@@ -566,8 +616,17 @@ u8 Cartridge::m3r(u16 addr) {
             case 0xC:
                 return this->mbc3Ctrl;
             default: // Not an RTC register
-                return this->readSram((u16) (addr & 0x1FFF));
+                return this->readSram((u16) (addr & SRAM_BANK_MASK));
         }
+    }
+
+    return 0xFF;
+}
+
+/* MBC6 */
+u8 Cartridge::m6r(u16 addr) {
+    if(this->sramEnabled) {
+        return this->readSram((u16) (addr & HALF_SRAM_BANK_MASK));
     }
 
     return 0xFF;
@@ -582,25 +641,25 @@ u8 Cartridge::m7r(u16 addr) {
         case 0x70:
             return 0;
         case 0x20:
-            if(this->gameboy->settings.readTiltX == NULL) {
+            if(this->gameboy->settings.readTiltX == nullptr) {
                 return 0xFF;
             }
 
             return (u8) (this->gameboy->settings.readTiltX() & 0xFF);
         case 0x30:
-            if(this->gameboy->settings.readTiltX == NULL) {
+            if(this->gameboy->settings.readTiltX == nullptr) {
                 return 0x07;
             }
 
             return (u8) ((this->gameboy->settings.readTiltX() >> 8) & 0xFF);
         case 0x40:
-            if(this->gameboy->settings.readTiltY == NULL) {
+            if(this->gameboy->settings.readTiltY == nullptr) {
                 return 0xFF;
             }
 
             return (u8) (this->gameboy->settings.readTiltY() & 0xFF);
         case 0x50:
-            if(this->gameboy->settings.readTiltY == NULL) {
+            if(this->gameboy->settings.readTiltY == nullptr) {
                 return 0x07;
             }
 
@@ -616,7 +675,7 @@ u8 Cartridge::m7r(u16 addr) {
 u8 Cartridge::h3r(u16 addr) {
     switch(this->huc3Mode) {
         case 0xA:
-            return this->readSram((u16) (addr & 0x1FFF));
+            return this->readSram((u16) (addr & SRAM_BANK_MASK));
         case 0xC:
             return this->huc3Value;
         case 0xB:
@@ -641,7 +700,7 @@ u8 Cartridge::camr(u16 addr) {
 
         return 0;
     } else {
-        return this->readSram((u16) (addr & 0x1FFF));
+        return this->readSram((u16) (addr & SRAM_BANK_MASK));
     }
 }
 
@@ -649,70 +708,56 @@ u8 Cartridge::camr(u16 addr) {
 
 /* MBC0 (ROM) */
 void Cartridge::m0w(u16 addr, u8 val) {
-    switch(addr >> 12) {
-        case 0x0: /* 0000 - 1FFF */
-        case 0x1:
-            break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
-            break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
-            break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
-        case 0xa: /* A000 - BFFF */
-        case 0xb:
-            this->writeSram((u16) (addr & 0x1FFF), val);
-            break;
-        default:
-            break;
+    if((addr >> 13) == 0x5) {
+        this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
     }
 }
 
 /* MBC1 */
 void Cartridge::m1w(u16 addr, u8 val) {
-    int newBank;
-
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
             this->sramEnabled = (val & 0xF) == 0xA;
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
+        case 0x1: /* 2000 - 3FFF */
             val &= 0x1F;
+            val = val ? val : 1; // Writing 0 for the lower 5 bits translates to 1.
+
             if(this->rockmanMapper) {
-                newBank = ((val > 0xF) ? val - 8 : val);
+                this->romBank1 = (u8) ((val > 0xF) ? val - 8 : val);
             } else {
-                newBank = (this->romBank1 & 0xE0) | val;
+                this->romBank1 = (u8) ((this->romBank1 & 0xE0) | val);
             }
 
-            this->romBank1 = newBank ? newBank : 1;
             this->mapRomBank1();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
-            val &= 3;
+        case 0x2: /* 4000 - 5FFF */
+            val &= 0x03;
             if(this->mbc1RamMode) { /* RAM mode */
                 this->sramBank = val;
                 this->mapSramBank();
             } else { /* ROM mode */
-                newBank = (this->romBank1 & 0x1F) | (val << 5);
-                this->romBank1 = newBank ? newBank : 1;
+                this->romBank1 = (u8) ((val << 5) | (this->romBank1 & 0x1F));
                 this->mapRomBank1();
             }
 
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
+        case 0x3: /* 6000 - 7FFF */
             this->mbc1RamMode = (bool) (val & 1);
+            if(this->mbc1RamMode) {
+                // Cannot access ROM banks after 0x1F in RAM mode.
+                this->romBank1 &= 0x1F;
+                this->mapRomBank1();
+            } else {
+                // Cannot access other RAM banks in ROM mode.
+                this->sramBank = 0;
+                this->mapSramBank();
+            }
+
             break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if(this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), val);
+                this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             }
 
             break;
@@ -723,26 +768,27 @@ void Cartridge::m1w(u16 addr, u8 val) {
 
 /* MBC2 */
 void Cartridge::m2w(u16 addr, u8 val) {
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
-            this->sramEnabled = (val & 0xF) == 0xA;
+            // Least significant bit of upper address byte must be 0.
+            if((addr & 0x100) == 0) {
+                this->sramEnabled = (val & 0xF) == 0xA;
+            }
+
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
-            this->romBank1 = val ? val : 1;
-            this->mapRomBank1();
+        case 0x1: /* 2000 - 3FFF */
+            val &= 0xF;
+
+            // Least significant bit of upper address byte must be 1.
+            if((addr & 0x100) != 0) {
+                this->romBank1 = val ? val : 1;
+                this->mapRomBank1();
+            }
+
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
-            break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if(this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), (u8) (val & 0xF));
+                this->writeSram((u16) (addr & 0x1FF), (u8) (val & 0xF));
             }
 
             break;
@@ -753,26 +799,23 @@ void Cartridge::m2w(u16 addr, u8 val) {
 
 /* MBC3 */
 void Cartridge::m3w(u16 addr, u8 val) {
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
             this->sramEnabled = (val & 0xF) == 0xA;
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
+        case 0x1: /* 2000 - 3FFF */
             val &= 0x7F;
+
             this->romBank1 = val ? val : 1;
             this->mapRomBank1();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
-            /* The RTC register is selected by writing values 0x8-0xc, ram banks
-             * are selected by values 0x0-0x3 */
+        case 0x2: /* 4000 - 5FFF */
+            /* The RTC register is selected by writing values 0x8-0xC, ram banks
+             * are selected by values 0x0-0x7 */
             this->sramBank = val;
             this->mapSramBank();
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
+        case 0x3: /* 6000 - 7FFF */
             if(val) {
                 this->latchClock();
 
@@ -781,52 +824,34 @@ void Cartridge::m3w(u16 addr, u8 val) {
                     this->rtcClock.days &= 0x1FF;
                 }
 
-                this->mbc3Ctrl = (u8) ((this->mbc3Ctrl & ~1) | ((this->rtcClock.days >> 8) & 1));
+                this->mbc3Ctrl = (u8) ((this->mbc3Ctrl & 0xFE) | ((this->rtcClock.days >> 8) & 1));
             }
 
             break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if(!this->sramEnabled) {
                 break;
             }
 
             switch(this->sramBank) { // Check for RTC register
                 case 0x8:
-                    if(this->rtcClock.seconds != val) {
-                        this->rtcClock.seconds = val;
-                    }
-
+                    this->rtcClock.seconds = val;
                     return;
                 case 0x9:
-                    if(this->rtcClock.minutes != val) {
-                        this->rtcClock.minutes = val;
-                    }
-
+                    this->rtcClock.minutes = val;
                     return;
                 case 0xA:
-                    if(this->rtcClock.hours != val) {
-                        this->rtcClock.hours = val;
-                    }
-
+                    this->rtcClock.hours = val;
                     return;
                 case 0xB:
-                    if((this->rtcClock.days & 0xff) != val) {
-                        this->rtcClock.days &= 0x100;
-                        this->rtcClock.days |= val;
-                    }
-
+                    this->rtcClock.days = (this->rtcClock.days & 0x100) | val;
                     return;
                 case 0xC:
-                    if(this->mbc3Ctrl != val) {
-                        this->rtcClock.days &= 0xFF;
-                        this->rtcClock.days |= (val & 1) << 8;
-                        this->mbc3Ctrl = val;
-                    }
-
+                    this->rtcClock.days = ((val & 1) << 8) | (this->rtcClock.days & 0xFF);
+                    this->mbc3Ctrl = val;
                     return;
                 default: // Not an RTC register
-                    this->writeSram((u16) (addr & 0x1FFF), val);
+                    this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             }
 
             break;
@@ -840,14 +865,14 @@ void Cartridge::m5w(u16 addr, u8 val) {
     switch(addr >> 12) {
         case 0x0: /* 0000 - 1FFF */
         case 0x1:
-            this->sramEnabled = ((val & 0xF) == 0xA);
+            this->sramEnabled = (val & 0xF) == 0xA;
             break;
         case 0x2: /* 2000 - 3FFF */
             this->romBank1 = (this->romBank1 & 0x100) | val;
             this->mapRomBank1();
             break;
         case 0x3:
-            this->romBank1 = (this->romBank1 & 0xFF) | (val & 1) << 8;
+            this->romBank1 = (this->romBank1 & 0xFF) | ((val & 1) << 8);
             this->mapRomBank1();
             break;
         case 0x4: /* 4000 - 5FFF */
@@ -858,13 +883,10 @@ void Cartridge::m5w(u16 addr, u8 val) {
             this->sramBank = this->rumble ? (val & 0x7) : (val & 0xF);
             this->mapSramBank();
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
         case 0xA: /* A000 - BFFF */
         case 0xB:
             if(this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), val);
+                this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             }
 
             break;
@@ -875,39 +897,38 @@ void Cartridge::m5w(u16 addr, u8 val) {
 
 /* MBC6 */
 void Cartridge::m6w(u16 addr, u8 val) {
-    switch(addr >> 12) {
-        case 0x0: /* 0000 - 1FFF */
-        case 0x1:
+    switch(addr >> 10) {
+        case 0x0: /* 0000 - 03FF */
             this->sramEnabled = ((val & 0xF) == 0xA);
             break;
-        case 0x2: /* 2000 - 3FFF */
-            if(!(addr & 0x0800)) {
-                this->mbc6RomBank1ALatch = val & 0x7F;
-            } else if(val == 0) {
-                this->mbc6RomBank1A = this->mbc6RomBank1ALatch;
-                this->mapRomBank1();
-            }
-
+        case 0x1: /* 0400 - 07FF */
+            this->mbc6SramBankA = val;
+            this->mapSramBank();
             break;
-        case 0x3:
-            if(!(addr & 0x0800)) {
-                this->mbc6RomBank1BLatch = val & 0x7F;
-            } else if(val == 0) {
-                this->mbc6RomBank1B = this->mbc6RomBank1BLatch;
-                this->mapRomBank1();
-            }
-
+        case 0x2: /* 0800 - 0BFF */
+            this->mbc6SramBankB = val;
+            this->mapSramBank();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
+        case 0x8: /* 2000 - 27FF */
+        case 0x9:
+            this->mbc6RomBank1A = val;
+            this->mapRomBank1();
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
+        case 0xC: /* 3000 - 37FF */
+        case 0xD:
+            this->mbc6RomBank1B = val;
+            this->mapRomBank1();
             break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x28: /* A000 - BFFF */
+        case 0x29:
+        case 0x2A:
+        case 0x2B:
+        case 0x2C:
+        case 0x2D:
+        case 0x2E:
+        case 0x2F:
             if(this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), val);
+                this->writeSram((u16) (addr & HALF_SRAM_BANK_MASK), val);
             }
 
             break;
@@ -929,28 +950,20 @@ void Cartridge::m6w(u16 addr, u8 val) {
 #define MBC7_COMMAND_READ 2
 #define MBC7_COMMAND_FILL 3
 
+// TODO: Revise MBC7 implementation to be more accurate.
 /* MBC7 */
 void Cartridge::m7w(u16 addr, u8 val) {
-    switch(addr >> 12) {
-        case 0x0: /* 0000 - 1FFF */
-        case 0x1:
-            break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
+    switch(addr >> 13) {
+        case 0x1: /* 2000 - 3FFF */
             val &= 0x7F;
             this->romBank1 = val ? val : 1;
             this->mapRomBank1();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
+        case 0x2: /* 4000 - 5FFF */
             this->sramBank = val & 0xF;
             this->mapSramBank();
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if((addr & 0xF0) == 0x80) {
                 int oldCs = this->mbc7Cs;
                 int oldSk = this->mbc7Sk;
@@ -1115,9 +1128,8 @@ void Cartridge::m7w(u16 addr, u8 val) {
 
 /* MMM01 */
 void Cartridge::mmm01w(u16 addr, u8 val) {
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
             if(this->mmm01BankSelected) {
                 this->sramEnabled = (val & 0xF) == 0xA;
             } else {
@@ -1131,8 +1143,7 @@ void Cartridge::mmm01w(u16 addr, u8 val) {
             }
 
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
+        case 0x1: /* 2000 - 3FFF */
             if(this->mmm01BankSelected) {
                 this->romBank1 = this->mmm01RomBaseBank + (val ? val : 1);
             this->mapRomBank1();
@@ -1141,21 +1152,16 @@ void Cartridge::mmm01w(u16 addr, u8 val) {
             }
 
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
+        case 0x2: /* 4000 - 5FFF */
             if(this->mmm01BankSelected) {
                 this->sramBank = val;
                 this->mapSramBank();
             }
 
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if(this->mmm01BankSelected && this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), val);
+                this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             }
 
             break;
@@ -1166,18 +1172,15 @@ void Cartridge::mmm01w(u16 addr, u8 val) {
 
 /* HUC1 */
 void Cartridge::h1w(u16 addr, u8 val) {
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
             this->sramEnabled = (val & 0xF) == 0xA;
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
-            this->romBank1 = val & 0x3F;
+        case 0x1: /* 2000 - 3FFF */
+            this->romBank1 = (u8) (val & 0x3F);
             this->mapRomBank1();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
+        case 0x2: /* 4000 - 5FFF */
             val &= 3;
             if(this->huc1RamMode) {
                 this->sramBank = val;
@@ -1188,14 +1191,12 @@ void Cartridge::h1w(u16 addr, u8 val) {
             }
 
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
+        case 0x3: /* 6000 - 7FFF */
             this->huc1RamMode = (bool) (val & 1);
             break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if(this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), val);
+                this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             }
 
             break;
@@ -1206,29 +1207,22 @@ void Cartridge::h1w(u16 addr, u8 val) {
 
 /* HUC3 */
 void Cartridge::h3w(u16 addr, u8 val) {
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
             this->huc3Mode = val;
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
+        case 0x1: /* 2000 - 3FFF */
             this->romBank1 = val ? val : 1;
             this->mapRomBank1();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
+        case 0x2: /* 4000 - 5FFF */
             this->sramBank = val & 0xF;
             this->mapSramBank();
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
-        case 0xA: /* a000 - bFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             switch(this->huc3Mode) {
                 case 0xA:
-                    this->writeSram((u16) (addr & 0x1FFF), val);
+                    this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
                     break;
                 case 0xB:
                     switch(val & 0xF0) {
@@ -1276,7 +1270,7 @@ void Cartridge::h3w(u16 addr, u8 val) {
                             this->huc3Value = 1;
                             break;
                         default:
-                            if(this->gameboy->settings.printDebug != NULL) {
+                            if(this->gameboy->settings.printDebug != nullptr) {
                                 this->gameboy->settings.printDebug("Unhandled HuC3 command 0x%02X.\n", val);
                             }
 
@@ -1300,30 +1294,23 @@ void Cartridge::h3w(u16 addr, u8 val) {
 
 /* CAMERA */
 void Cartridge::camw(u16 addr, u8 val) {
-    switch(addr >> 12) {
+    switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-        case 0x1:
             this->sramEnabled = (val & 0xF) == 0xA;
             break;
-        case 0x2: /* 2000 - 3FFF */
-        case 0x3:
+        case 0x1: /* 2000 - 3FFF */
             this->romBank1 = val ? val : 1;
             this->mapRomBank1();
             break;
-        case 0x4: /* 4000 - 5FFF */
-        case 0x5:
-            this->cameraIO = val == 0x10;
+        case 0x2: /* 4000 - 5FFF */
+            this->cameraIO = (val & 0x10) != 0;
             if(!this->cameraIO) {
                 this->sramBank = val & 0xF;
                 this->mapSramBank();
             }
 
             break;
-        case 0x6: /* 6000 - 7FFF */
-        case 0x7:
-            break;
-        case 0xA: /* A000 - BFFF */
-        case 0xB:
+        case 0x5: /* A000 - BFFF */
             if(this->cameraIO) {
                 u8 reg = (u8) (addr & 0x7F);
                 if(reg < 0x36) {
@@ -1337,7 +1324,7 @@ void Cartridge::camw(u16 addr, u8 val) {
                     }
                 }
             } else if(this->sramEnabled) {
-                this->writeSram((u16) (addr & 0x1FFF), val);
+                this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             }
 
             break;
@@ -1487,12 +1474,12 @@ void Cartridge::t5w(u16 addr, u8 val) {
                 break;
         }
     } else if(this->sramEnabled) {
-        this->writeSram((u16) (addr & 0x1FFF), val);
+        this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
     }
 }
 
 void Cartridge::camu() {
-    if(this->cameraReadyCycle != 0 && this->gameboy->cpu->getCycle() >= this->cameraReadyCycle) {
+    if(this->cameraReadyCycle != 0 && this->gameboy->cpu.getCycle() >= this->cameraReadyCycle) {
         this->cameraRegs[0] &= ~0x1;
         this->cameraReadyCycle = 0;
     }
@@ -1522,15 +1509,15 @@ void Cartridge::camTakePicture() {
     float edgeAlpha = edgeRatioLUT[(this->cameraRegs[4] & 0x70) >> 4];
     u32 e3Bit = (u32) ((this->cameraRegs[4] & 0x80) >> 7);
 
-    this->cameraReadyCycle = this->gameboy->cpu->getCycle() + exposureBits * 64 + (nBit ? 0 : 2048) + 129784;
-    this->gameboy->cpu->setEventCycle(this->cameraReadyCycle);
+    this->cameraReadyCycle = this->gameboy->cpu.getCycle() + exposureBits * 64 + (nBit ? 0 : 2048) + 129784;
+    this->gameboy->cpu.setEventCycle(this->cameraReadyCycle);
 
-    if(this->gameboy->settings.getCameraImage == NULL) {
+    if(this->gameboy->settings.getCameraImage == nullptr) {
         return;
     }
 
     u32* image = this->gameboy->settings.getCameraImage();
-    if(image == NULL) {
+    if(image == nullptr) {
         return;
     }
 
@@ -1615,7 +1602,7 @@ void Cartridge::camTakePicture() {
             memcpy(filtered, tempBuf, sizeof(filtered));
             break;
         default:
-            if(this->gameboy->settings.printDebug != NULL) {
+            if(this->gameboy->settings.printDebug != nullptr) {
                 this->gameboy->settings.printDebug("Unsupported camera filter mode: 0x%x\n", filterMode);
             }
 

@@ -1,11 +1,11 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
 
 class Gameboy;
+
+#define ROM_BANK_SIZE 0x4000
+#define ROM_BANK_MASK 0x3FFF
 
 typedef enum : u8 {
     MBC0 = 0,
@@ -26,17 +26,16 @@ typedef enum : u8 {
 
 class Cartridge {
 public:
-    Cartridge(std::istream& romData, int romSize, std::istream& saveData, int saveSize);
+    Cartridge(std::istream& romData, u32 romSize, std::istream& saveData);
     ~Cartridge();
 
     void reset(Gameboy* gameboy);
-
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream &data);
-
     void update();
 
     void save(std::ostream& data);
+
+    friend std::istream& operator>>(std::istream& is, Cartridge& cart);
+    friend std::ostream& operator<<(std::ostream& os, const Cartridge& cart);
 
     inline const std::string getRomTitle() {
         return this->romTitle;
@@ -54,7 +53,7 @@ public:
         return this->rom[0x0148];
     }
 
-    inline int getRomBanks() {
+    inline u16 getRomBanks() {
         return this->totalRomBanks;
     }
 
@@ -62,7 +61,7 @@ public:
         return this->rom[0x0149];
     }
 
-    inline int getRamBanks() {
+    inline u8 getRamBanks() {
         return this->totalRamBanks;
     }
 
@@ -78,12 +77,12 @@ public:
         return this->mbcType;
     }
 
-    inline u8* getRomBank(int bank) {
-        if(bank < 0 || bank >= this->totalRomBanks) {
-            return NULL;
+    inline u8* getRomBank(u16 bank) {
+        if(bank >= this->totalRomBanks) {
+            return nullptr;
         }
 
-        return &this->rom[bank * 0x4000];
+        return &this->rom[bank * ROM_BANK_SIZE];
     }
 private:
     u8 readSram(u16 addr);
@@ -95,6 +94,7 @@ private:
     void mapBanks();
 
     u8 m3r(u16 addr);
+    u8 m6r(u16 addr);
     u8 m7r(u16 addr);
     u8 h3r(u16 addr);
     u8 camr(u16 addr);
@@ -123,18 +123,18 @@ private:
     typedef void (Cartridge::*mbcUpdate)();
 
     const mbcRead mbcReads[MBC_MAX] = {
-            NULL,
-            NULL,
-            NULL,
+            nullptr,
+            nullptr,
+            nullptr,
             &Cartridge::m3r,
-            NULL,
-            NULL,
+            nullptr,
+            &Cartridge::m6r,
             &Cartridge::m7r,
-            NULL,
-            NULL,
+            nullptr,
+            nullptr,
             &Cartridge::h3r,
             &Cartridge::camr,
-            NULL
+            nullptr
     };
 
     const mbcWrite mbcWrites[MBC_MAX] = {
@@ -153,18 +153,18 @@ private:
     };
 
     const mbcUpdate mbcUpdates[MBC_MAX] = {
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
             &Cartridge::camu,
-            NULL
+            nullptr
     };
 
     Gameboy* gameboy;
@@ -172,8 +172,8 @@ private:
     u8* rom;
 
     std::string romTitle;
-    int totalRomBanks;
-    int totalRamBanks;
+    u16 totalRomBanks;
+    u8 totalRamBanks;
     MBCType mbcType;
     bool rockmanMapper;
     bool rumble;
@@ -196,9 +196,9 @@ private:
     } rtcClock;
 
     // General
-    s32 romBank0;
-    s32 romBank1;
-    s32 sramBank;
+    u16 romBank0;
+    u16 romBank1;
+    u8 sramBank;
     bool sramEnabled;
 
     // MBC1
@@ -208,10 +208,10 @@ private:
     u8 mbc3Ctrl;
 
     // MBC6
-    s32 mbc6RomBank1ALatch;
-    s32 mbc6RomBank1BLatch;
-    s32 mbc6RomBank1A;
-    s32 mbc6RomBank1B;
+    u8 mbc6RomBank1A;
+    u8 mbc6RomBank1B;
+    u8 mbc6SramBankA;
+    u8 mbc6SramBankB;
 
     // MBC7
     bool mbc7WriteEnable;
@@ -242,8 +242,8 @@ private:
     u8 cameraRegs[0x36];
 
     // TAMA5
-    s32 tama5CommandNumber;
-    s32 tama5RamByteSelect;
+    u8 tama5CommandNumber;
+    u8 tama5RamByteSelect;
     u8 tama5Commands[0x10];
     u8 tama5RAM[0x100];
 };

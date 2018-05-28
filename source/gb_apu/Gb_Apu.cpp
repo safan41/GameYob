@@ -15,6 +15,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include <assert.h>
 #include <string.h>
+#include <gameboy.h>
 
 #include "gameboy.h"
 
@@ -269,7 +270,7 @@ void Gb_Apu::silence_osc( Gb_Osc& o )
 		if ( o.output )
 		{
 			o.output->set_modified();
-			if(gameboy->settings.soundChannelEnabled[o.osc_index]) {
+			if(gameboy->settings.getOption((GameboyOption) (GB_OPT_SOUND_CHANNEL_1_ENABLED + o.osc_index))) {
 				med_synth.offset( last_time, delta, o.output );
 			}
 		}

@@ -44,7 +44,7 @@ inline void Gb_Osc::update_amp( s32 time, int new_amp )
 template<int quality,int range>
 inline void Gb_Osc::push_sample( const Blip_Synth<quality, range>* synth, s32 time, int delta, Blip_Buffer* out )
 {
-	if(gameboy->settings.soundChannelEnabled[osc_index])
+	if(gameboy->settings.getOption((GameboyOption) (GB_OPT_SOUND_CHANNEL_1_ENABLED + osc_index)))
 	{
 		synth->offset_inline( time, delta, out );
 	}

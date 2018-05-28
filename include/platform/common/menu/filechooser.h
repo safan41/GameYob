@@ -2,36 +2,40 @@
 
 #include "types.h"
 
+#include "menu.h"
+
+#include <functional>
 #include <vector>
 
-bool isFileChooserActive();
-
-class FileChooser {
+class FileChooser : public Menu {
 public:
-    FileChooser(std::string directory, std::vector<std::string> extensions, bool canQuit);
+    FileChooser(std::function<void(bool, const std::string&)> finished, const std::string& directory, const std::vector<std::string>& extensions);
 
-    std::string getDirectory();
-    void setDirectory(std::string directory);
-    char* chooseFile();
-
+    bool processInput(UIKey key, u32 width, u32 height);
+    void draw(u32 width, u32 height);
 private:
+    typedef struct {
+        std::string name;
+        u8 flags;
+    } FileEntry;
+
     void updateScrollDown();
     void updateScrollUp();
     void navigateBack();
 
-    void refreshContents();
-    void redrawChooser();
-    bool updateChooser(char** result);
+    static bool compareFiles(FileEntry &a, FileEntry &b);
 
+    void refreshContents();
+
+    std::function<void(bool, const std::string&)> finished;
     std::string directory;
     std::vector<std::string> extensions;
-    bool canQuit;
 
-    std::vector<std::string> filenames;
-    std::vector<int> flags;
-    int selection = 0;
-    int filesPerPage = 24;
-    int numFiles = 0;
-    int scrollY = 0;
-    std::string matchFile = "";
+    std::vector<FileEntry> files;
+
+    u32 selection = 0;
+    u32 scrollY = 0;
+    u32 filesPerPage = 24;
+
+    std::string initialSelection = "";
 };

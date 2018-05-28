@@ -1,4 +1,6 @@
-#include <string.h>
+#include <cstring>
+#include <istream>
+#include <ostream>
 
 #include "cpu.h"
 #include "gameboy.h"
@@ -13,7 +15,7 @@ SGB::SGB(Gameboy* gameboy) {
 void SGB::reset() {
     this->packetLength = 0;
     this->packetsTransferred = 0;
-    this->packetBit = -1;
+    this->packetBit = 0xFF;
     memset(this->packet, 0, sizeof(this->packet));
     this->command = 0;
     memset(&this->cmdData, 0, sizeof(this->cmdData));
@@ -33,8 +35,8 @@ void SGB::reset() {
     this->mask = 0;
     memset(this->paletteMap, 0, sizeof(this->paletteMap));
 
-    this->gameboy->mmu->mapIOReadFunc(JOYP, [this](u16 addr) -> u8 {
-        u8 joyp = this->gameboy->mmu->readIO(JOYP);
+    this->gameboy->mmu.mapIOReadFunc(JOYP, [this](u16 addr) -> u8 {
+        u8 joyp = this->gameboy->mmu.readIO(JOYP);
 
         if(this->gameboy->gbMode == MODE_SGB && (joyp & 0x30) == 0x30) {
             return (u8) (0xFF - this->selectedController);
@@ -49,35 +51,35 @@ void SGB::reset() {
         }
     });
 
-    this->gameboy->mmu->mapIOWriteFunc(JOYP, [this](u16 addr, u8 val) -> void {
+    this->gameboy->mmu.mapIOWriteFunc(JOYP, [this](u16 addr, u8 val) -> void {
         if(this->gameboy->gbMode != MODE_SGB) {
-            this->gameboy->mmu->writeIO(JOYP, val);
+            this->gameboy->mmu.writeIO(JOYP, val);
             return;
         }
 
         if((val & 0x30) == 0) {
             // Start packet transfer
             this->packetBit = 0;
-            this->gameboy->mmu->writeIO(JOYP, 0xCF);
+            this->gameboy->mmu.writeIO(JOYP, 0xCF);
             return;
         }
 
-        if(this->packetBit != -1) {
-            u8 oldJoyp = this->gameboy->mmu->readIO(JOYP);
-            this->gameboy->mmu->writeIO(JOYP, val);
+        if(this->packetBit != 0xFF) {
+            u8 oldJoyp = this->gameboy->mmu.readIO(JOYP);
+            this->gameboy->mmu.writeIO(JOYP, val);
 
-            int shift = this->packetBit % 8;
-            int byte = (this->packetBit / 8) % 16;
+            u8 shift = this->packetBit & 0x7;
+            u8 byte = (this->packetBit >> 3) & 0xF;
             if(shift == 0) {
                 this->packet[byte] = 0;
             }
 
             if((oldJoyp & 0x30) == 0 && (val & 0x30) != 0x30) { // A bit of speculation here. Fixes Castlevania.
-                this->packetBit = -1;
+                this->packetBit = 0xFF;
                 return;
             }
 
-            int bit;
+            u8 bit;
             if(!(val & 0x10)) {
                 bit = 0;
             } else if(!(val & 0x20)) {
@@ -88,17 +90,17 @@ void SGB::reset() {
 
             this->packet[byte] |= bit << shift;
             this->packetBit++;
-            if(this->packetBit == 128) {
+            if(this->packetBit == 0x80) {
                 if(this->packetsTransferred == 0) {
                     this->command = this->packet[0] >> 3;
                     this->packetLength = this->packet[0] & 7;
                 }
 
-                if(this->sgbCommands[this->command] != NULL) {
-                    (this->*sgbCommands[this->command])(this->packetsTransferred);
+                if(this->sgbCommands[this->command] != nullptr) {
+                    (this->*sgbCommands[this->command])();
                 }
 
-                this->packetBit = -1;
+                this->packetBit = 0xFF;
                 this->packetsTransferred++;
                 if(this->packetsTransferred == this->packetLength) {
                     this->packetLength = 0;
@@ -116,7 +118,7 @@ void SGB::reset() {
                     this->buttonsChecked = 0;
                 }
 
-                this->gameboy->mmu->writeIO(JOYP, (u8) (0xFF - this->selectedController));
+                this->gameboy->mmu.writeIO(JOYP, (u8) (0xFF - this->selectedController));
             } else {
                 if((val & 0x30) == 0x10) {
                     this->buttonsChecked |= 1;
@@ -124,66 +126,16 @@ void SGB::reset() {
                     this->buttonsChecked |= 2;
                 }
 
-                this->gameboy->mmu->writeIO(JOYP, (u8) (val | 0xCF));
+                this->gameboy->mmu.writeIO(JOYP, (u8) (val | 0xCF));
             }
         }
     });
 }
 
-void SGB::loadState(std::istream& data, u8 version) {
-    data.read((char*) &this->packetLength, sizeof(this->packetLength));
-    data.read((char*) &this->packetsTransferred, sizeof(this->packetsTransferred));
-    data.read((char*) &this->packetBit, sizeof(this->packetBit));
-    data.read((char*) this->packet, sizeof(this->packet));
-    data.read((char*) &this->command, sizeof(this->command));
-    data.read((char*) &this->cmdData, sizeof(this->cmdData));
-
-    data.read((char*) &this->controllers, sizeof(this->controllers));
-    data.read((char*) &this->numControllers, sizeof(this->numControllers));
-    data.read((char*) &this->selectedController, sizeof(this->selectedController));
-    data.read((char*) &this->buttonsChecked, sizeof(this->buttonsChecked));
-
-    data.read((char*) this->palettes, sizeof(this->palettes));
-    data.read((char*) this->attrFiles, sizeof(this->attrFiles));
-
-    data.read((char*) &this->hasBg, sizeof(this->hasBg));
-    data.read((char*) this->bgTiles, sizeof(this->bgTiles));
-    data.read((char*) this->bgMap, sizeof(this->bgMap));
-
-    data.read((char*) &this->mask, sizeof(this->mask));
-    data.read((char*) this->paletteMap, sizeof(this->paletteMap));
-
-    this->refreshBg();
-}
-
-void SGB::saveState(std::ostream& data) {
-    data.write((char*) &this->packetLength, sizeof(this->packetLength));
-    data.write((char*) &this->packetsTransferred, sizeof(this->packetsTransferred));
-    data.write((char*) &this->packetBit, sizeof(this->packetBit));
-    data.write((char*) this->packet, sizeof(this->packet));
-    data.write((char*) &this->command, sizeof(this->command));
-    data.write((char*) &this->cmdData, sizeof(this->cmdData));
-
-    data.write((char*) &this->controllers, sizeof(this->controllers));
-    data.write((char*) &this->numControllers, sizeof(this->numControllers));
-    data.write((char*) &this->selectedController, sizeof(this->selectedController));
-    data.write((char*) &this->buttonsChecked, sizeof(this->buttonsChecked));
-
-    data.write((char*) this->palettes, sizeof(this->palettes));
-    data.write((char*) this->attrFiles, sizeof(this->attrFiles));
-
-    data.write((char*) &this->hasBg, sizeof(this->hasBg));
-    data.write((char*) this->bgTiles, sizeof(this->bgTiles));
-    data.write((char*) this->bgMap, sizeof(this->bgMap));
-
-    data.write((char*) &this->mask, sizeof(this->mask));
-    data.write((char*) this->paletteMap, sizeof(this->paletteMap));
-}
-
 void SGB::update() {
-    u8 interrupts = this->gameboy->mmu->readIO(IF);
+    u8 interrupts = this->gameboy->mmu.readIO(IF);
 
-    u8 joyp = this->gameboy->mmu->readIO(JOYP);
+    u8 joyp = this->gameboy->mmu.readIO(JOYP);
     if(!(joyp & 0x10)) {
         if((this->controllers[0] & 0xf0) != 0xf0) {
             interrupts |= INT_JOYPAD;
@@ -194,34 +146,88 @@ void SGB::update() {
         }
     }
 
-    this->gameboy->mmu->writeIO(IF, interrupts);
+    this->gameboy->mmu.writeIO(IF, interrupts);
+}
+
+std::istream& operator>>(std::istream& is, SGB& sgb) {
+    is.read((char*) &sgb.packetLength, sizeof(sgb.packetLength));
+    is.read((char*) &sgb.packetsTransferred, sizeof(sgb.packetsTransferred));
+    is.read((char*) &sgb.packetBit, sizeof(sgb.packetBit));
+    is.read((char*) sgb.packet, sizeof(sgb.packet));
+    is.read((char*) &sgb.command, sizeof(sgb.command));
+    is.read((char*) &sgb.cmdData, sizeof(sgb.cmdData));
+
+    is.read((char*) &sgb.controllers, sizeof(sgb.controllers));
+    is.read((char*) &sgb.numControllers, sizeof(sgb.numControllers));
+    is.read((char*) &sgb.selectedController, sizeof(sgb.selectedController));
+    is.read((char*) &sgb.buttonsChecked, sizeof(sgb.buttonsChecked));
+
+    is.read((char*) sgb.palettes, sizeof(sgb.palettes));
+    is.read((char*) sgb.attrFiles, sizeof(sgb.attrFiles));
+
+    is.read((char*) &sgb.hasBg, sizeof(sgb.hasBg));
+    is.read((char*) sgb.bgTiles, sizeof(sgb.bgTiles));
+    is.read((char*) sgb.bgMap, sizeof(sgb.bgMap));
+
+    is.read((char*) &sgb.mask, sizeof(sgb.mask));
+    is.read((char*) sgb.paletteMap, sizeof(sgb.paletteMap));
+
+    sgb.refreshBg();
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const SGB& sgb) {
+    os.write((char*) &sgb.packetLength, sizeof(sgb.packetLength));
+    os.write((char*) &sgb.packetsTransferred, sizeof(sgb.packetsTransferred));
+    os.write((char*) &sgb.packetBit, sizeof(sgb.packetBit));
+    os.write((char*) sgb.packet, sizeof(sgb.packet));
+    os.write((char*) &sgb.command, sizeof(sgb.command));
+    os.write((char*) &sgb.cmdData, sizeof(sgb.cmdData));
+
+    os.write((char*) &sgb.controllers, sizeof(sgb.controllers));
+    os.write((char*) &sgb.numControllers, sizeof(sgb.numControllers));
+    os.write((char*) &sgb.selectedController, sizeof(sgb.selectedController));
+    os.write((char*) &sgb.buttonsChecked, sizeof(sgb.buttonsChecked));
+
+    os.write((char*) sgb.palettes, sizeof(sgb.palettes));
+    os.write((char*) sgb.attrFiles, sizeof(sgb.attrFiles));
+
+    os.write((char*) &sgb.hasBg, sizeof(sgb.hasBg));
+    os.write((char*) sgb.bgTiles, sizeof(sgb.bgTiles));
+    os.write((char*) sgb.bgMap, sizeof(sgb.bgMap));
+
+    os.write((char*) &sgb.mask, sizeof(sgb.mask));
+    os.write((char*) sgb.paletteMap, sizeof(sgb.paletteMap));
+
+    return os;
 }
 
 void SGB::refreshBg() {
-    if(this->hasBg && this->gameboy->settings.frameBuffer != NULL) {
-        for(int tileY = 0; tileY < 28; tileY++) {
+    if(this->hasBg && this->gameboy->settings.frameBuffer != nullptr) {
+        for(u8 tileY = 0; tileY < 28; tileY++) {
             u16* lineMap = (u16*) &this->bgMap[tileY * 32 * sizeof(u16)];
-            for(int tileX = 0; tileX < 32; tileX++) {
+            for(u8 tileX = 0; tileX < 32; tileX++) {
                 u16 mapEntry = lineMap[tileX];
                 u8* tile = &this->bgTiles[(mapEntry & 0xFF) * 0x20];
                 u16* palette = (u16*) &this->bgMap[0x800 + ((mapEntry >> 10) & 3) * 0x20];
                 bool flipX = (mapEntry & 0x4000) != 0;
                 bool flipY = (mapEntry & 0x8000) != 0;
 
-                for(int y = 0; y < 8; y++) {
-                    for(int x = 0; x < 8; x++) {
-                        int pixelX = tileX * 8 + x;
-                        int pixelY = tileY * 8 + y;
+                for(u8 y = 0; y < 8; y++) {
+                    for(u8 x = 0; x < 8; x++) {
+                        u16 pixelX = tileX * 8 + x;
+                        u16 pixelY = tileY * 8 + y;
 
-                        int dataX = flipX ? 7 - x : x;
-                        int dataY = flipY ? 7 - y : y;
+                        u8 dataX = flipX ? 7 - x : x;
+                        u8 dataY = flipY ? 7 - y : y;
                         u8 colorId = (u8) (((tile[dataY * 2] >> (7 - dataX)) & 1) | (((tile[dataY * 2 + 1] >> (7 - dataX)) & 1) << 1) | (((tile[0x10 + dataY * 2] >> (7 - dataX)) & 1) << 2) | (((tile[0x10 + dataY * 2 + 1] >> (7 - dataX)) & 1) << 3));
 
                         u32 color = 0;
                         if(colorId != 0) {
                             color = RGB555ToRGB8888(palette[colorId]);
-                        } else if(pixelX < 48 || pixelX >= 208 || pixelY < 40 || pixelY >= 184) {
-                            color = this->gameboy->ppu->getBgPalette()[0];
+                        } else if(pixelX < GB_SCREEN_X || pixelX >= GB_SCREEN_X + GB_SCREEN_WIDTH || pixelY < GB_SCREEN_Y || pixelY >= GB_SCREEN_Y + GB_SCREEN_HEIGHT) {
+                            color = this->gameboy->ppu.getBgPalette()[0];
                         } else {
                             continue;
                         }
@@ -234,25 +240,26 @@ void SGB::refreshBg() {
     }
 }
 
-void SGB::loadAttrFile(int index) {
+void SGB::loadAttrFile(u8 index) {
     if(index > 0x2C) {
         return;
     }
 
-    int src = index * 0x5A;
-    int dest = 0;
+    u16 src = index * 0x5A;
+    u16 dest = 0;
     for(int i = 0; i < 20 * 18 / 4; i++) {
         this->paletteMap[dest++] = (u8) ((this->attrFiles[src] >> 6) & 3);
         this->paletteMap[dest++] = (u8) ((this->attrFiles[src] >> 4) & 3);
         this->paletteMap[dest++] = (u8) ((this->attrFiles[src] >> 2) & 3);
         this->paletteMap[dest++] = (u8) ((this->attrFiles[src] >> 0) & 3);
+
         src++;
     }
 }
 
 // Begin commands
 
-void SGB::palXX(int block) {
+void SGB::palXX() {
     int s1, s2;
     switch(this->command) {
         case 0:
@@ -285,28 +292,28 @@ void SGB::palXX(int block) {
     palette[1] = RGB555ToRGB8888(paletteData[2]);
     palette[2] = RGB555ToRGB8888(paletteData[3]);
 
-    memcpy(&this->gameboy->ppu->getBgPalette()[s1 * 4 + 1], palette, sizeof(palette));
-    memcpy(&this->gameboy->ppu->getSprPalette()[s1 * 4 + 1], palette, sizeof(palette));
-    memcpy(&this->gameboy->ppu->getSprPalette()[(s1 + 4) * 4 + 1], palette, sizeof(palette));
+    memcpy(&this->gameboy->ppu.getBgPalette()[s1 * 4 + 1], palette, sizeof(palette));
+    memcpy(&this->gameboy->ppu.getSprPalette()[s1 * 4 + 1], palette, sizeof(palette));
+    memcpy(&this->gameboy->ppu.getSprPalette()[(s1 + 4) * 4 + 1], palette, sizeof(palette));
 
     palette[0] = RGB555ToRGB8888(paletteData[4]);
     palette[1] = RGB555ToRGB8888(paletteData[5]);
     palette[2] = RGB555ToRGB8888(paletteData[6]);
 
-    memcpy(&this->gameboy->ppu->getBgPalette()[s2 * 4 + 1], palette, sizeof(palette));
-    memcpy(&this->gameboy->ppu->getSprPalette()[s2 * 4 + 1], palette, sizeof(palette));
-    memcpy(&this->gameboy->ppu->getSprPalette()[(s2 + 4) * 4 + 1], palette, sizeof(palette));
+    memcpy(&this->gameboy->ppu.getBgPalette()[s2 * 4 + 1], palette, sizeof(palette));
+    memcpy(&this->gameboy->ppu.getSprPalette()[s2 * 4 + 1], palette, sizeof(palette));
+    memcpy(&this->gameboy->ppu.getSprPalette()[(s2 + 4) * 4 + 1], palette, sizeof(palette));
 
     for(int i = 0; i < 4; i++) {
-        this->gameboy->ppu->getBgPalette()[i * 4] = color0;
-        this->gameboy->ppu->getSprPalette()[i * 4] = color0;
-        this->gameboy->ppu->getSprPalette()[(i + 4) * 4] = color0;
+        this->gameboy->ppu.getBgPalette()[i * 4] = color0;
+        this->gameboy->ppu.getSprPalette()[i * 4] = color0;
+        this->gameboy->ppu.getSprPalette()[(i + 4) * 4] = color0;
     }
 }
 
-void SGB::attrBlock(int block) {
+void SGB::attrBlock() {
     int pos;
-    if(block == 0) {
+    if(this->packetsTransferred == 0) {
         this->cmdData.attrBlock.dataBytes = 0;
         this->cmdData.numDataSets = packet[1];
         pos = 2;
@@ -371,15 +378,15 @@ void SGB::attrBlock(int block) {
                 }
             }
 
-            this-> cmdData.attrBlock.dataBytes = 0;
+            this->cmdData.attrBlock.dataBytes = 0;
             this->cmdData.numDataSets--;
         }
     }
 }
 
-void SGB::attrLin(int block) {
+void SGB::attrLin() {
     int index = 0;
-    if(block == 0) {
+    if(this->packetsTransferred == 0) {
         this->cmdData.numDataSets = packet[1];
         index = 2;
     }
@@ -403,7 +410,7 @@ void SGB::attrLin(int block) {
     }
 }
 
-void SGB::attrDiv(int block) {
+void SGB::attrDiv() {
     u8 p0 = (u8) ((this->packet[1] >> 2) & 3);
     u8 p1 = (u8) ((this->packet[1] >> 4) & 3);
     u8 p2 = (u8) ((this->packet[1] >> 0) & 3);
@@ -447,12 +454,12 @@ void SGB::attrDiv(int block) {
     }
 }
 
-void SGB::attrChr(int block) {
+void SGB::attrChr() {
     u8 &x = this->cmdData.attrChr.x;
     u8 &y = this->cmdData.attrChr.y;
 
     int index = 0;
-    if(block == 0) {
+    if(this->packetsTransferred == 0) {
         this->cmdData.numDataSets = this->packet[3] | (this->packet[4] << 8);
         this->cmdData.attrChr.writeStyle = (u8) (this->packet[5] & 1);
         x = (u8) (this->packet[1] >= 20 ? 19 : this->packet[1]);
@@ -488,15 +495,15 @@ void SGB::attrChr(int block) {
     }
 }
 
-void SGB::sound(int block) {
+void SGB::sound() {
     // Unimplemented
 }
 
-void SGB::souTrn(int block) {
+void SGB::souTrn() {
     // Unimplemented
 }
 
-void SGB::palSet(int block) {
+void SGB::palSet() {
     int color0PaletteId = (this->packet[1] | (this->packet[2] << 8)) & 0x1ff;
     u32 color0 = RGB555ToRGB8888(this->palettes[color0PaletteId * 4]);
 
@@ -509,9 +516,9 @@ void SGB::palSet(int block) {
         palette[2] = RGB555ToRGB8888(this->palettes[paletteId * 4 + 2]);
         palette[3] = RGB555ToRGB8888(this->palettes[paletteId * 4 + 3]);
 
-        memcpy(&this->gameboy->ppu->getBgPalette()[i * 4], palette, sizeof(palette));
-        memcpy(&this->gameboy->ppu->getSprPalette()[i * 4], palette, sizeof(palette));
-        memcpy(&this->gameboy->ppu->getSprPalette()[(i + 4) * 4], palette, sizeof(palette));
+        memcpy(&this->gameboy->ppu.getBgPalette()[i * 4], palette, sizeof(palette));
+        memcpy(&this->gameboy->ppu.getSprPalette()[i * 4], palette, sizeof(palette));
+        memcpy(&this->gameboy->ppu.getSprPalette()[(i + 4) * 4], palette, sizeof(palette));
     }
 
     if(this->packet[9] & 0x80) {
@@ -523,69 +530,69 @@ void SGB::palSet(int block) {
     }
 }
 
-void SGB::palTrn(int block) {
-    this->gameboy->ppu->transferTiles((u8*) this->palettes);
+void SGB::palTrn() {
+    this->gameboy->ppu.transferTiles((u8*) this->palettes);
 }
 
-void SGB::atrcEn(int block) {
+void SGB::atrcEn() {
     // Unimplemented
 }
 
-void SGB::testEn(int block) {
+void SGB::testEn() {
     // Unimplemented
 }
 
-void SGB::iconEn(int block) {
+void SGB::iconEn() {
     // Unimplemented
 }
 
-void SGB::dataSnd(int block) {
+void SGB::dataSnd() {
     // Unimplemented
 }
 
-void SGB::dataTrn(int block) {
+void SGB::dataTrn() {
     // Unimplemented
 }
 
-void SGB::mltReq(int block) {
+void SGB::mltReq() {
     this->numControllers = (u8) ((this->packet[1] & 3) + 1);
     this->selectedController = (u8) (this->numControllers > 1 ? 1 : 0);
 }
 
-void SGB::jump(int block) {
+void SGB::jump() {
     // Unimplemented
 }
 
-void SGB::chrTrn(int block) {
-    this->gameboy->ppu->transferTiles(&this->bgTiles[(this->packet[1] & 1) * 0x1000]);
+void SGB::chrTrn() {
+    this->gameboy->ppu.transferTiles(&this->bgTiles[(this->packet[1] & 1) * 0x1000]);
 
     this->hasBg = true;
     this->refreshBg();
 }
 
-void SGB::pctTrn(int block) {
-    this->gameboy->ppu->transferTiles(this->bgMap);
+void SGB::pctTrn() {
+    this->gameboy->ppu.transferTiles(this->bgMap);
 
     this->hasBg = true;
     this->refreshBg();
 }
 
-void SGB::attrTrn(int block) {
-    this->gameboy->ppu->transferTiles(this->attrFiles);
+void SGB::attrTrn() {
+    this->gameboy->ppu.transferTiles(this->attrFiles);
 }
 
-void SGB::attrSet(int block) {
+void SGB::attrSet() {
     this->loadAttrFile(this->packet[1] & 0x3f);
     if(this->packet[1] & 0x40) {
         this->mask = 0;
     }
 }
 
-void SGB::maskEn(int block) {
+void SGB::maskEn() {
     this->mask = (u8) (this->packet[1] & 3);
 }
 
-void SGB::objTrn(int block) {
+void SGB::objTrn() {
     // Unimplemented
 }
 

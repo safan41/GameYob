@@ -2,6 +2,8 @@
 
 #include "types.h"
 
+struct KeyConfig;
+
 enum {
     FUNC_KEY_NONE = 0,
     FUNC_KEY_A = 1,
@@ -28,19 +30,22 @@ enum {
 
 void inputInit();
 void inputCleanup();
+
 void inputUpdate();
-bool inputKeyHeld(int key);
-bool inputKeyPressed(int key);
-void inputKeyRelease(int key);
+
+bool inputKeyHeld(u32 key);
+bool inputKeyPressed(u32 key);
+void inputKeyRelease(u32 key);
 void inputReleaseAll();
+
 u16 inputGetMotionSensorX();
 u16 inputGetMotionSensorY();
 
-struct KeyConfig;
+void inputSetRumble(bool rumble);
 
-int inputGetKeyCount();
-bool inputIsValidKey(int keyIndex);
-const char* inputGetKeyName(int keyIndex);
+u32 inputGetKeyCount();
+bool inputIsValidKey(u32 keyIndex);
+const std::string inputGetKeyName(u32 keyIndex);
 
-KeyConfig inputGetDefaultKeyConfig();
+KeyConfig* inputGetDefaultKeyConfig();
 void inputLoadKeyConfig(KeyConfig* keyConfig);

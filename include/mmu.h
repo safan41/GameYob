@@ -1,8 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <istream>
-#include <ostream>
 
 #include "types.h"
 
@@ -95,11 +93,11 @@ public:
 
     void reset();
 
-    void loadState(std::istream& data, u8 version);
-    void saveState(std::ostream& data);
-
     u8 read(u16 addr);
     void write(u16 addr, u8 val);
+
+    friend std::istream& operator>>(std::istream& is, MMU& mmu);
+    friend std::ostream& operator<<(std::ostream& os, const MMU& mmu);
 
     inline void mapBankBlock(u8 bank, u8* block) {
         this->banks[bank & 0xF] = block;

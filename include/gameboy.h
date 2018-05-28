@@ -1,14 +1,19 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
-
 #include "types.h"
+
+#include "apu.h"
+#include "cpu.h"
+#include "mmu.h"
+#include "ppu.h"
+#include "printer.h"
+#include "serial.h"
+#include "sgb.h"
+#include "timer.h"
 
 class APU;
 class CPU;
 class Cartridge;
-class MMU;
 class PPU;
 class Printer;
 class Serial;
@@ -18,9 +23,6 @@ class Timer;
 // Cycle Constants
 #define CYCLES_PER_SECOND 4194304
 #define CYCLES_PER_FRAME 70224
-
-// Return Codes
-#define RET_VBLANK 1
 
 // Buttons
 #define GB_A 0x01
@@ -38,31 +40,38 @@ typedef enum {
     MODE_CGB
 } GBMode;
 
-inline std::istream& operator>>(std::istream& str, GBMode& v) {
-    u8 mode = 0;
-    if(str >> mode) {
-        v = static_cast<GBMode>(mode);
-    }
-
-    return str;
-}
-
-inline std::ostream& operator<<(std::ostream& str, GBMode v) {
-    str << (u8) v;
-    return str;
-}
-
 typedef enum {
-    SGB_OFF,
+    SGB_OFF = 0,
     SGB_PREFER_GBC,
     SGB_PREFER_SGB
 } SGBMode;
 
 typedef enum {
-    GBC_OFF,
+    GBC_OFF = 0,
     GBC_IF_NEEDED,
     GBC_ON
 } GBCMode;
+
+typedef enum {
+    /* SGBMode */
+    GB_OPT_SGB_MODE = 0,
+    /* GBCMode */
+    GB_OPT_GBC_MODE,
+    /* bool */
+    GB_OPT_GBA_MODE,
+    GB_OPT_BIOS_ENABLED,
+    GB_OPT_PRINTER_ENABLED,
+    GB_OPT_DRAW_ENABLED,
+    GB_OPT_PER_PIXEL_RENDERING,
+    GB_OPT_EMULATE_BLUR,
+    GB_OPT_SOUND_ENABLED,
+    GB_OPT_SOUND_CHANNEL_1_ENABLED,
+    GB_OPT_SOUND_CHANNEL_2_ENABLED,
+    GB_OPT_SOUND_CHANNEL_3_ENABLED,
+    GB_OPT_SOUND_CHANNEL_4_ENABLED,
+
+    NUM_GB_OPT
+} GameboyOption;
 
 typedef struct {
     void (*printDebug)(const char* s, ...);
@@ -71,12 +80,11 @@ typedef struct {
     u16 (*readTiltY)();
     void (*setRumble)(bool rumble);
 
-    bool (*getIRState)();
-    void (*setIRState)(bool state);
-
     u32* (*getCameraImage)();
 
     void (*printImage)(bool appending, u8* buf, int size, u8 palette);
+
+    u8 (*getOption)(GameboyOption opt);
 
     u32* frameBuffer;
     u32 framePitch;
@@ -84,17 +92,6 @@ typedef struct {
     u32* audioBuffer;
     u32 audioSamples;
     u32 audioSampleRate;
-
-    SGBMode sgbModeOption;
-    GBCMode gbcModeOption;
-    bool gbaModeOption;
-    bool biosEnabled;
-    bool perPixelRendering;
-    bool emulateBlur;
-    bool printerEnabled;
-    bool drawEnabled;
-    bool soundEnabled;
-    bool soundChannelEnabled[4];
 } GameboySettings;
 
 class Gameboy {
@@ -118,13 +115,13 @@ public:
 
     Cartridge* cartridge;
 
-    MMU* mmu;
-    CPU* cpu;
-    PPU* ppu;
-    APU* apu;
-    SGB* sgb;
-    Timer* timer;
-    Serial* serial;
+    MMU mmu;
+    CPU cpu;
+    PPU ppu;
+    APU apu;
+    SGB sgb;
+    Timer timer;
+    Serial serial;
 
     GBMode gbMode;
 

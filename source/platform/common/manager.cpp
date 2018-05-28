@@ -1,18 +1,26 @@
 #include <dirent.h>
-#include <stdlib.h>
-#include <string.h>
 
+#ifdef WIN32
+#include <io.h>
+#define access _access
+#else
+#include <unistd.h>
+#endif
+
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 
 #include "libs/stb_image/stb_image.h"
 
+#include "platform/common/menu/filechooser.h"
+#include "platform/common/menu/mainmenu.h"
+#include "platform/common/menu/menu.h"
 #include "platform/common/cheatengine.h"
 #include "platform/common/config.h"
-#include "platform/common/menu/filechooser.h"
 #include "platform/common/manager.h"
-#include "platform/common/menu/menu.h"
 #include "platform/audio.h"
 #include "platform/gfx.h"
 #include "platform/input.h"
@@ -72,12 +80,6 @@ static const u32 p017[] = {
         RGBA32(0xFF, 0xFF, 0xA5), RGBA32(0xFF, 0x94, 0x94), RGBA32(0x94, 0x94, 0xFF), RGBA32(0x00, 0x00, 0x00),
         RGBA32(0xFF, 0xFF, 0xA5), RGBA32(0xFF, 0x94, 0x94), RGBA32(0x94, 0x94, 0xFF), RGBA32(0x00, 0x00, 0x00),
         RGBA32(0xFF, 0xFF, 0xA5), RGBA32(0xFF, 0x94, 0x94), RGBA32(0x94, 0x94, 0xFF), RGBA32(0x00, 0x00, 0x00)
-};
-
-static const u32 p01B[] = {
-        RGBA32(0xFF, 0xFF, 0xFF), RGBA32(0xFF, 0xCE, 0x00), RGBA32(0x9C, 0x63, 0x00), RGBA32(0x00, 0x00, 0x00),
-        RGBA32(0xFF, 0xFF, 0xFF), RGBA32(0xFF, 0xCE, 0x00), RGBA32(0x9C, 0x63, 0x00), RGBA32(0x00, 0x00, 0x00),
-        RGBA32(0xFF, 0xFF, 0xFF), RGBA32(0xFF, 0xCE, 0x00), RGBA32(0x9C, 0x63, 0x00), RGBA32(0x00, 0x00, 0x00)
 };
 
 static const u32 p100[] = {
@@ -476,15 +478,15 @@ static const u32* findPalette(const char* title) {
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 #define NS_PER_FRAME ((s64) (1000000000.0 / ((double) CYCLES_PER_SECOND / (double) CYCLES_PER_FRAME)))
 
-Gameboy* gameboy = NULL;
-CheatEngine* cheatEngine = NULL;
+static Gameboy* gameboy = nullptr;
+static CheatEngine* cheatEngine = nullptr;
 
-int fastForwardCounter;
+static int fastForwardCounter;
 
 static u32 audioBuffer[2048];
 
@@ -492,6 +494,8 @@ static std::chrono::time_point<std::chrono::high_resolution_clock, std::chrono::
 static bool fastForward;
 
 static std::string romName;
+
+static u32 numPrinted;
 
 static int fps;
 static std::chrono::time_point<std::chrono::high_resolution_clock, std::chrono::nanoseconds> lastPrintTime;
@@ -501,24 +505,197 @@ static int autoFireCounterB;
 
 static bool emulationPaused;
 
-static FileChooser romChooser("/", {"sgb", "gbc", "cgb", "gb"}, true);
-static bool chooserInitialized = false;
+static u8 optToConfigGroup[NUM_GB_OPT] = {
+        GROUP_GAMEBOY,
+        GROUP_GAMEBOY,
+        GROUP_GAMEBOY,
+        GROUP_GAMEBOY,
+        GROUP_GAMEBOY,
+        GROUP_DISPLAY,
+        GROUP_DISPLAY,
+        0,
+        GROUP_SOUND,
+        GROUP_SOUND,
+        GROUP_SOUND,
+        GROUP_SOUND,
+        GROUP_SOUND
+};
+
+static u8 optToConfigOption[NUM_GB_OPT] = {
+        GAMEBOY_SGB_MODE,
+        GAMEBOY_GBC_MODE,
+        GAMEBOY_GBA_MODE,
+        GAMEBOY_BIOS,
+        GAMEBOY_GB_PRINTER,
+        0,
+        DISPLAY_RENDERING_MODE,
+        DISPLAY_EMULATE_BLUR,
+        SOUND_MASTER,
+        SOUND_CHANNEL_1,
+        SOUND_CHANNEL_2,
+        SOUND_CHANNEL_3,
+        SOUND_CHANNEL_4
+};
+
+static u8 mgrGetOption(GameboyOption opt) {
+    if(opt == GB_OPT_DRAW_ENABLED) {
+        return (u8) (!mgrGetFastForward() || fastForwardCounter >= configGetMultiChoice(GROUP_DISPLAY, DISPLAY_FF_FRAME_SKIP));
+    } else {
+        return configGetMultiChoice(optToConfigGroup[opt], optToConfigOption[opt]);
+    }
+}
+
+static void mgrPrintImage(bool appending, u8* buf, int size, u8 palette) {
+    // Find the first available "print number".
+    char filename[300];
+    while(true) {
+        snprintf(filename, 300, "%s-%" PRIu32 ".bmp", mgrGetRomName().c_str(), numPrinted);
+
+        // If appending, the last file written to is already selected.
+        // Else, if the file doesn't exist, we're done searching.
+        if(appending || access(filename, R_OK) != 0) {
+            if(appending && access(filename, R_OK) != 0) {
+                // This is a failsafe, this shouldn't happen
+                appending = false;
+                mgrPrintDebug("The image to be appended to doesn't exist: %s\n", filename);
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        numPrinted++;
+    }
+
+    int width = PRINTER_WIDTH;
+
+    // In case of error, size must be rounded off to the nearest 16 vertical pixels.
+    if(size % (width / 4 * 16) != 0) {
+        size += (width / 4 * 16) - (size % (width / 4 * 16));
+    }
+
+    int height = size / width * 4;
+    int pixelArraySize = (width * height + 1) / 2;
+
+    u8 bmpHeader[] = { // Contains header data & palettes
+            0x42, 0x4d, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x28, 0x00,
+            0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x12, 0x0b, 0x00, 0x00, 0x12, 0x0b, 0x00, 0x00, 0x04, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x55, 0x55, 0x55, 0x55, 0xaa, 0xaa,
+            0xaa, 0xaa, 0xff, 0xff, 0xff, 0xff
+    };
+
+    // Set up the palette
+    for(int i = 0; i < 4; i++) {
+        u8 rgb = 0;
+        switch((palette >> (i * 2)) & 3) {
+            case 0:
+                rgb = 0xff;
+                break;
+            case 1:
+                rgb = 0xaa;
+                break;
+            case 2:
+                rgb = 0x55;
+                break;
+            case 3:
+                rgb = 0x00;
+                break;
+            default:
+                break;
+        }
+
+        for(int j = 0; j < 4; j++) {
+            bmpHeader[0x36 + i * 4 + j] = rgb;
+        }
+    }
+
+    u16* pixelData = (u16*) malloc((size_t) pixelArraySize);
+
+    // Convert the gameboy's tile-based 2bpp into a linear 4bpp format.
+    for(int i = 0; i < size; i += 2) {
+        u8 b1 = buf[i];
+        u8 b2 = buf[i + 1];
+
+        int pixel = i * 4;
+        int tile = pixel / 64;
+
+        int index = tile / 20 * width * 8;
+        index += (tile % 20) * 8;
+        index += ((pixel % 64) / 8) * width;
+        index += (pixel % 8);
+        index /= 4;
+
+        pixelData[index] = 0;
+        pixelData[index + 1] = 0;
+        for(int j = 0; j < 2; j++) {
+            pixelData[index] |= (((b1 >> j >> 4) & 1) | (((b2 >> j >> 4) & 1) << 1)) << (j * 4 + 8);
+            pixelData[index] |= (((b1 >> j >> 6) & 1) | (((b2 >> j >> 6) & 1) << 1)) << (j * 4);
+            pixelData[index + 1] |= (((b1 >> j) & 1) | (((b2 >> j) & 1) << 1)) << (j * 4 + 8);
+            pixelData[index + 1] |= (((b1 >> j >> 2) & 1) | (((b2 >> j >> 2) & 1) << 1)) << (j * 4);
+        }
+    }
+
+    if(appending) {
+        std::fstream stream(filename, std::fstream::in | std::fstream::out | std::fstream::binary | std::fstream::ate);
+        s64 end = stream.tellg();
+
+        int temp = 0;
+
+        // Update height
+        stream.seekg(0x16);
+        stream.read((char*) &temp, sizeof(temp));
+        temp = -(height + (-temp));
+        stream.seekg(0x16);
+        stream.write((char*) &temp, sizeof(temp));
+
+        // Update pixelArraySize
+        stream.seekg(0x22);
+        stream.read((char*) &temp, sizeof(temp));
+        temp += pixelArraySize;
+        stream.seekg(0x22);
+        stream.write((char*) &temp, sizeof(temp));
+
+        // Update file size
+        temp += sizeof(bmpHeader);
+        stream.seekg(0x2);
+        stream.write((char*) &temp, sizeof(temp));
+
+        // Append pixel data
+        stream.seekg(end);
+        stream.write((char*) pixelData, pixelArraySize);
+
+        stream.close();
+    } else { // Not appending; making a file from scratch
+        std::fstream stream(filename, std::fstream::out | std::fstream::binary);
+
+        *(u32*) (bmpHeader + 0x02) = sizeof(bmpHeader) + pixelArraySize;
+        *(u32*) (bmpHeader + 0x22) = (u32) pixelArraySize;
+        *(u32*) (bmpHeader + 0x12) = (u32) width;
+        *(u32*) (bmpHeader + 0x16) = (u32) -height;
+
+        stream.write((char*) bmpHeader, sizeof(bmpHeader));
+        stream.write((char*) pixelData, pixelArraySize);
+        stream.close();
+    }
+
+    free(pixelData);
+}
 
 void mgrInit() {
     gameboy = new Gameboy();
 
-    gameboy->settings.printDebug = systemPrintDebug;
+    gameboy->settings.printDebug = mgrPrintDebug;
 
     gameboy->settings.readTiltX = inputGetMotionSensorX;
     gameboy->settings.readTiltY = inputGetMotionSensorY;
-    gameboy->settings.setRumble = systemSetRumble;
-
-    gameboy->settings.getIRState = systemGetIRState;
-    gameboy->settings.setIRState = systemSetIRState;
+    gameboy->settings.setRumble = inputSetRumble;
 
     gameboy->settings.getCameraImage = systemGetCameraImage;
 
-    gameboy->settings.printImage = systemPrintImage;
+    gameboy->settings.printImage = mgrPrintImage;
+
+    gameboy->settings.getOption = mgrGetOption;
 
     gameboy->settings.frameBuffer = gfxGetScreenBuffer();
     gameboy->settings.framePitch = gfxGetScreenPitch();
@@ -546,25 +723,25 @@ void mgrInit() {
 
     emulationPaused = false;
 
-    chooserInitialized = false;
+    configLoad();
 }
 
 void mgrExit() {
     mgrPowerOff();
 
-    if(gameboy != NULL) {
+    if(gameboy != nullptr) {
         delete gameboy;
-        gameboy = NULL;
+        gameboy = nullptr;
     }
 
-    if(cheatEngine != NULL) {
+    if(cheatEngine != nullptr) {
         delete cheatEngine;
-        cheatEngine = NULL;
+        cheatEngine = nullptr;
     }
 }
 
 void mgrReset() {
-    if(gameboy == NULL) {
+    if(gameboy == nullptr) {
         return;
     }
 
@@ -580,42 +757,59 @@ void mgrReset() {
     gfxDrawScreen();
 }
 
+void mgrPrintDebug(const char* str, ...) {
+    if(configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_CONSOLE_OUTPUT) == CONSOLE_OUTPUT_DEBUG && !menuIsVisible()) {
+        va_list list;
+        va_start(list, str);
+        uiPrintv(str, list);
+        va_end(list);
+
+        uiFlush();
+    }
+}
+
+bool mgrIsRomLoaded() {
+    return gameboy->cartridge != nullptr;
+}
+
+Cartridge* mgrGetRom() {
+    return gameboy->cartridge;
+}
+
 std::string mgrGetRomName() {
     return romName;
 }
 
-void mgrPowerOn(const char* romFile) {
-    if(gameboy == NULL) {
+static void mgrPowerOn(const std::string& romFile) {
+    if(gameboy == nullptr) {
         return;
     }
 
     mgrPowerOff();
 
-    if(romFile != NULL) {
+    if(!romFile.empty()) {
         std::ifstream romStream(romFile, std::ios::binary | std::ios::ate);
         if(!romStream.is_open()) {
-            systemPrintDebug("Failed to open ROM file: %s\n", strerror(errno));
+            mgrPrintDebug("Failed to open ROM file: %s\n", strerror(errno));
             return;
         }
 
-        int romSize = (int) romStream.tellg();
+        u32 romSize = (u32) romStream.tellg();
         romStream.seekg(0);
 
-        romName = romFile;
-        std::string::size_type dot = romName.find_last_of('.');
+        std::string::size_type dot = romFile.find_last_of('.');
         if(dot != std::string::npos) {
-            romName = romName.substr(0, dot);
+            romName = romFile.substr(0, dot);
+        } else {
+            romName = romFile;
         }
 
         std::ifstream saveStream(romName + ".sav", std::ios::binary | std::ios::ate);
         if(!saveStream.is_open()) {
-            systemPrintDebug("Failed to open save file: %s\n", strerror(errno));
+            mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         }
 
-        int saveSize = (int) saveStream.tellg();
-        saveStream.seekg(0);
-
-        gameboy->cartridge = new Cartridge(romStream, romSize, saveStream, saveSize);
+        gameboy->cartridge = new Cartridge(romStream, romSize, saveStream);
 
         romStream.close();
         saveStream.close();
@@ -626,44 +820,37 @@ void mgrPowerOn(const char* romFile) {
             mgrLoadState(-1);
             mgrDeleteState(-1);
         }
-
-        enableMenuOption("Suspend");
-        enableMenuOption("ROM Info");
-        enableMenuOption("State Slot");
-        enableMenuOption("Save State");
-        if(mgrStateExists(stateNum)) {
-            enableMenuOption("Load State");
-            enableMenuOption("Delete State");
-        } else {
-            disableMenuOption("Load State");
-            disableMenuOption("Delete State");
-        }
-
-        enableMenuOption("Manage Cheats");
-        enableMenuOption("Exit without saving");
-    } else {
-        disableMenuOption("Suspend");
-        disableMenuOption("ROM Info");
-        disableMenuOption("State Slot");
-        disableMenuOption("Save State");
-        disableMenuOption("Load State");
-        disableMenuOption("Delete State");
-        disableMenuOption("Manage Cheats");
-        disableMenuOption("Exit without saving");
     }
 
     mgrReset();
 }
 
+static void mgrWriteSave() {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return;
+    }
+
+    std::ofstream stream(romName + ".sav", std::ios::binary);
+    if(!stream.is_open()) {
+        mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
+        return;
+    }
+
+    gameboy->cartridge->save(stream);
+    stream.close();
+}
+
 void mgrPowerOff(bool save) {
-    if(gameboy != NULL && gameboy->isPoweredOn()) {
-        if(gameboy->cartridge != NULL) {
+    if(gameboy != nullptr && gameboy->isPoweredOn()) {
+        if(gameboy->cartridge != nullptr) {
             if(save) {
                 mgrWriteSave();
             }
 
+            cheatEngine->saveCheats(romName + ".cht");
+
             delete gameboy->cartridge;
-            gameboy->cartridge = NULL;
+            gameboy->cartridge = nullptr;
         }
 
         gameboy->powerOff();
@@ -677,58 +864,19 @@ void mgrPowerOff(bool save) {
     gfxDrawScreen();
 }
 
-void mgrSelectRom() {
-    mgrPowerOff();
-
-    if(!chooserInitialized) {
-        chooserInitialized = true;
-
-        std::string& romPath = configGetRomPath();
-        DIR* dir = opendir(romPath.c_str());
-        if(dir) {
-            closedir(dir);
-            romChooser.setDirectory(romPath);
-        }
-    }
-
-    char* filename = romChooser.chooseFile();
-    if(filename == NULL) {
-        systemRequestExit();
-        return;
-    }
-
-    mgrPowerOn(filename);
-    free(filename);
-}
-
-void mgrWriteSave() {
-    if(gameboy == NULL || gameboy->cartridge == NULL) {
-        return;
-    }
-
-    std::ofstream stream(romName + ".sav", std::ios::binary);
-    if(!stream.is_open()) {
-        systemPrintDebug("Failed to open save file: %s\n", strerror(errno));
-        return;
-    }
-
-    gameboy->cartridge->save(stream);
-    stream.close();
-}
-
 const std::string mgrGetStateName(int stateNum) {
     std::stringstream nameStream;
     if(stateNum == -1) {
-        nameStream << mgrGetRomName() << ".yss";
+        nameStream << romName << ".yss";
     } else {
-        nameStream << mgrGetRomName() << ".ys" << stateNum;
+        nameStream << romName << ".ys" << stateNum;
     }
 
     return nameStream.str();
 }
 
 bool mgrStateExists(int stateNum) {
-    if(gameboy == NULL || gameboy->cartridge == NULL) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
         return false;
     }
 
@@ -742,13 +890,13 @@ bool mgrStateExists(int stateNum) {
 }
 
 bool mgrLoadState(int stateNum) {
-    if(gameboy == NULL || gameboy->cartridge == NULL) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
         return false;
     }
 
     std::ifstream stream(mgrGetStateName(stateNum), std::ios::binary);
     if(!stream.is_open()) {
-        systemPrintDebug("Failed to open state file: %s\n", strerror(errno));
+        mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
         return false;
     }
 
@@ -760,13 +908,13 @@ bool mgrLoadState(int stateNum) {
 }
 
 bool mgrSaveState(int stateNum) {
-    if(gameboy == NULL || gameboy->cartridge == NULL) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
         return false;
     }
 
     std::ofstream stream(mgrGetStateName(stateNum), std::ios::binary);
     if(!stream.is_open()) {
-        systemPrintDebug("Failed to open state file: %s\n", strerror(errno));
+        mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
         return false;
     }
 
@@ -776,67 +924,75 @@ bool mgrSaveState(int stateNum) {
 }
 
 void mgrDeleteState(int stateNum) {
-    if(gameboy == NULL || gameboy->cartridge == NULL) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
         return;
     }
 
     remove(mgrGetStateName(stateNum).c_str());
 }
 
+bool mgrCheatsExist() {
+    return cheatEngine != nullptr && cheatEngine->getNumCheats() > 0;
+}
+
+CheatEngine* mgrGetCheatEngine() {
+    return cheatEngine;
+}
+
 void mgrRefreshPalette() {
-    if(gameboy == NULL || gameboy->gbMode != MODE_GB) {
+    if(gameboy == nullptr || gameboy->gbMode != MODE_GB) {
         return;
     }
 
-    const u32* palette = NULL;
-    switch(gbColorizeMode) {
-        case 0:
+    const u32* palette = nullptr;
+    switch(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_COLORIZE_GB)) {
+        case COLORIZE_GB_OFF:
             palette = findPalette("GBC - Grayscale");
             break;
-        case 1:
-            if(gameboy->cartridge != NULL) {
+        case COLORIZE_GB_AUTO:
+            if(gameboy->cartridge != nullptr) {
                 palette = findPalette(gameboy->cartridge->getRomTitle().c_str());
             }
 
-            if(palette == NULL) {
+            if(palette == nullptr) {
                 palette = findPalette("GBC - Grayscale");
             }
 
             break;
-        case 2:
+        case COLORIZE_GB_INVERTED:
             palette = findPalette("GBC - Inverted");
             break;
-        case 3:
+        case COLORIZE_GB_PASTEL_MIX:
             palette = findPalette("GBC - Pastel Mix");
             break;
-        case 4:
+        case COLORIZE_GB_RED:
             palette = findPalette("GBC - Red");
             break;
-        case 5:
+        case COLORIZE_GB_ORANGE:
             palette = findPalette("GBC - Orange");
             break;
-        case 6:
+        case COLORIZE_GB_YELLOW:
             palette = findPalette("GBC - Yellow");
             break;
-        case 7:
+        case COLORIZE_GB_GREEN:
             palette = findPalette("GBC - Green");
             break;
-        case 8:
+        case COLORIZE_GB_BLUE:
             palette = findPalette("GBC - Blue");
             break;
-        case 9:
+        case COLORIZE_GB_BROWN:
             palette = findPalette("GBC - Brown");
             break;
-        case 10:
+        case COLORIZE_GB_DARK_GREEN:
             palette = findPalette("GBC - Dark Green");
             break;
-        case 11:
+        case COLORIZE_GB_DARK_BLUE:
             palette = findPalette("GBC - Dark Blue");
             break;
-        case 12:
+        case COLORIZE_GB_DARK_BROWN:
             palette = findPalette("GBC - Dark Brown");
             break;
-        case 13:
+        case COLORIZE_GB_CLASSIC_GREEN:
             palette = findPalette("GB - Classic");
             break;
         default:
@@ -844,12 +1000,12 @@ void mgrRefreshPalette() {
             break;
     }
 
-    memcpy(gameboy->ppu->getBgPalette(), palette, 4 * sizeof(u32));
-    memcpy(gameboy->ppu->getSprPalette(), palette + 4, 4 * sizeof(u32));
-    memcpy(gameboy->ppu->getSprPalette() + 4 * 4, palette + 8, 4 * sizeof(u32));
+    memcpy(gameboy->ppu.getBgPalette(), palette, 4 * sizeof(u32));
+    memcpy(gameboy->ppu.getSprPalette(), palette + 4, 4 * sizeof(u32));
+    memcpy(gameboy->ppu.getSprPalette() + 4 * 4, palette + 8, 4 * sizeof(u32));
 }
 
-bool mgrTryRawBorderFile(std::string border) {
+static bool mgrTryRawBorderFile(const std::string& border) {
     std::ifstream stream(border, std::ios::binary);
     if(stream.is_open()) {
         stream.close();
@@ -858,8 +1014,8 @@ bool mgrTryRawBorderFile(std::string border) {
         int imgHeight;
         int imgDepth;
         u8* image = stbi_load(border.c_str(), &imgWidth, &imgHeight, &imgDepth, STBI_rgb_alpha);
-        if(image == NULL) {
-            systemPrintDebug("Failed to decode image file.\n");
+        if(image == nullptr) {
+            mgrPrintDebug("Failed to decode image file.\n");
             return false;
         }
 
@@ -877,7 +1033,7 @@ bool mgrTryRawBorderFile(std::string border) {
         stbi_image_free(image);
 
         gfxLoadBorder(imgData, imgWidth, imgHeight);
-        delete imgData;
+        delete[] imgData;
 
         return true;
     }
@@ -885,21 +1041,34 @@ bool mgrTryRawBorderFile(std::string border) {
     return false;
 }
 
-static const char* scaleNames[] = {"off", "125", "150", "aspect", "full"};
+static bool mgrTryBorderFile(const std::string& border) {
+    if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS_SCALING) == CUSTOM_BORDERS_SCALING_PRE_SCALED) {
+        std::string name;
+        std::string extension;
 
-bool mgrTryBorderFile(std::string border) {
-    std::string extension = "";
-    std::string::size_type dotPos = border.rfind('.');
-    if(dotPos != std::string::npos) {
-        extension = border.substr(dotPos);
-        border = border.substr(0, dotPos);
+        std::string::size_type dotPos = border.rfind('.');
+        if(dotPos != std::string::npos) {
+            name = border.substr(0, dotPos);
+            extension = border.substr(dotPos);
+        } else {
+            name = border;
+        }
+
+        std::string scaleName = configGetMultiChoiceValueName(GROUP_DISPLAY, DISPLAY_SCALING_MODE, configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE));
+        std::transform(scaleName.begin(), scaleName.end(), scaleName.begin(), ::tolower);
+
+        if(mgrTryRawBorderFile(name + "_" + scaleName + extension)) {
+            return true;
+        }
     }
 
-    return (borderScaleMode == 0 && mgrTryRawBorderFile(border + "_" + scaleNames[scaleMode] + extension)) || mgrTryRawBorderFile(border + extension);
+    return mgrTryRawBorderFile(border);
 }
 
-bool mgrTryBorderName(std::string border) {
-    for(std::string extension : supportedImages) {
+static std::vector<std::string> supportedImages = {"jpg", "png", "tga", "bmp", "psd", "gif", "hdr", "pic"};
+
+static bool mgrTryBorderName(const std::string& border) {
+    for(const std::string& extension : supportedImages) {
         if(mgrTryBorderFile(border + "." + extension)) {
             return true;
         }
@@ -909,61 +1078,99 @@ bool mgrTryBorderName(std::string border) {
 }
 
 void mgrRefreshBorder() {
-    gfxLoadBorder(NULL, 0, 0);
+    gfxLoadBorder(nullptr, 0, 0);
 
-    if(customBordersEnabled && gameboy != NULL && gameboy->cartridge != NULL) {
-        if(!mgrTryBorderName(mgrGetRomName())) {
-            mgrTryBorderFile(configGetBorderPath());
+    if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON && gameboy != nullptr && gameboy->cartridge != nullptr) {
+        if(!mgrTryBorderName(romName)) {
+            mgrTryBorderFile(configGetPath(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH));
         }
     }
 }
 
 bool mgrGetFastForward() {
-    return fastForward || (!menuOn && inputKeyHeld(FUNC_KEY_FAST_FORWARD));
+    return fastForward || (!menuIsVisible() && inputKeyHeld(FUNC_KEY_FAST_FORWARD));
 }
 
-void mgrSetFastForward(bool ff) {
-    fastForward = ff;
+static bool mgrIsPaused() {
+    return emulationPaused || (configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_PAUSE_IN_MENU) == PAUSE_IN_MENU_ON && menuIsVisible());
 }
 
-void mgrToggleFastForward() {
-    fastForward = !fastForward;
-}
+static void mgrTakeScreenshot() {
+    u32 headerSize = 0x36;
+    u32 imageSize = GB_FRAME_WIDTH * GB_FRAME_HEIGHT * 4;
 
-void mgrPause() {
-    emulationPaused = true;
-}
+    u8* header = new u8[headerSize]();
 
-void mgrUnpause() {
-    emulationPaused = false;
-}
+    *(u16*) &header[0x0] = 0x4D42; // Magic identifier
+    *(u32*) &header[0x2] = headerSize + imageSize;
+    *(u32*) &header[0xA] = headerSize;
+    *(u32*) &header[0xE] = 0x28; // Info header size
+    *(u32*) &header[0x12] = GB_FRAME_WIDTH;
+    *(u32*) &header[0x16] = GB_FRAME_HEIGHT;
+    *(u16*) &header[0x1A] = 1; // Color planes
+    *(u16*) &header[0x1C] = 32; // Bits per pixel
+    *(u32*) &header[0x22] = imageSize;
 
-bool mgrIsPaused() {
-    return emulationPaused;
+    u32* image = new u32[GB_FRAME_WIDTH * GB_FRAME_HEIGHT]();
+
+    u32* buffer = gfxGetScreenBuffer();
+    u32 pitch = gfxGetScreenPitch();
+
+    for(u32 x = 0; x < GB_FRAME_WIDTH; x++) {
+        for(u32 y = 0; y < GB_FRAME_HEIGHT; y++) {
+            u32 src = buffer[y * pitch + x];
+            u32* dst = &image[(GB_FRAME_HEIGHT - y - 1) * GB_FRAME_WIDTH + x];
+
+            *dst = ((src & 0xFF) << 24) | ((src >> 8) & 0xFFFFFF);
+        }
+    }
+
+    std::stringstream fileStream;
+    fileStream << "gameyob_" << time(nullptr) << ".bmp";
+
+    std::ofstream stream(fileStream.str(), std::ios::binary);
+    if(stream.is_open()) {
+        stream.write((char*) header, (size_t) headerSize);
+        stream.write((char*) image, (size_t) imageSize);
+        stream.close();
+    } else {
+        mgrPrintDebug("Failed to open screenshot file: %s\n", strerror(errno));
+    }
+
+    delete[] header;
+    delete[] image;
 }
 
 void mgrRun() {
-    if(gameboy == NULL) {
-        return;
-    }
-
-    while(!gameboy->isPoweredOn()) {
-        if(!systemIsRunning()) {
-            return;
-        }
-
-        mgrSelectRom();
-    }
-
     auto time = std::chrono::high_resolution_clock::now();
     if(mgrGetFastForward() || (time - lastFrameTime).count() >= NS_PER_FRAME) {
         lastFrameTime = time;
 
         inputUpdate();
 
-        if(menuOn) {
-            updateMenu();
-        } else if(gameboy->isPoweredOn()) {
+        if(!gameboy->isPoweredOn() && !menuIsVisible()) {
+            std::string romPath = configGetPath(GROUP_GAMEYOB, GAMEYOB_ROM_PATH);
+            DIR* dir = opendir(romPath.c_str());
+            if(dir == nullptr) {
+                romPath = "/";
+            } else {
+                closedir(dir);
+            }
+
+            menuPush(new FileChooser([](bool chosen, const std::string& path) -> void {
+                if(chosen)  {
+                    mgrPowerOn(path);
+                } else {
+                    systemRequestExit();
+                }
+            }, romPath, {"sgb", "gbc", "cgb", "gb"}));
+        }
+
+        if(menuIsVisible()) {
+            menuUpdate();
+        } else {
+            emulationPaused = false;
+
             u8 buttonsPressed = 0xFF;
 
             if(inputKeyHeld(FUNC_KEY_UP)) {
@@ -1016,49 +1223,47 @@ void mgrRun() {
                 autoFireCounterB--;
             }
 
-            gameboy->sgb->setController(0, buttonsPressed);
+            gameboy->sgb.setController(0, buttonsPressed);
 
             if(inputKeyPressed(FUNC_KEY_SAVE)) {
                 mgrWriteSave();
             }
 
             if(inputKeyPressed(FUNC_KEY_FAST_FORWARD_TOGGLE)) {
-                mgrToggleFastForward();
-            }
-
-            if((inputKeyPressed(FUNC_KEY_MENU) || inputKeyPressed(FUNC_KEY_MENU_PAUSE))) {
-                if(pauseOnMenu || inputKeyPressed(FUNC_KEY_MENU_PAUSE)) {
-                    mgrPause();
-                }
-
-                mgrSetFastForward(false);
-                displayMenu();
+                fastForward = !fastForward;
             }
 
             if(inputKeyPressed(FUNC_KEY_SCALE)) {
-                setMenuOption("Scaling", (getMenuOption("Scaling") + 1) % 5);
+                configToggleMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE, 1);
             }
 
             if(inputKeyPressed(FUNC_KEY_RESET)) {
                 mgrReset();
             }
 
-            if(inputKeyPressed(FUNC_KEY_SCREENSHOT) && !menuOn) {
-                gfxTakeScreenshot();
+            if(inputKeyPressed(FUNC_KEY_SCREENSHOT)) {
+                mgrTakeScreenshot();
+            }
+
+            if(inputKeyPressed(FUNC_KEY_MENU) || inputKeyPressed(FUNC_KEY_MENU_PAUSE)) {
+                if(inputKeyPressed(FUNC_KEY_MENU_PAUSE)) {
+                    emulationPaused = true;
+                }
+
+                menuOpenMain();
             }
         }
 
-        if(gameboy->isPoweredOn() && !emulationPaused) {
+        if(gameboy->isPoweredOn() && !mgrIsPaused()) {
             cheatEngine->applyGSCheats();
 
-            gameboy->settings.drawEnabled = !mgrGetFastForward() || fastForwardCounter++ >= fastForwardFrameSkip;
             gameboy->runFrame();
 
-            if(gameboy->settings.soundEnabled) {
+            if(configGetMultiChoice(GROUP_SOUND, SOUND_MASTER) == SOUND_ON) {
                 audioPlay(audioBuffer, gameboy->audioSamplesWritten);
             }
 
-            if(gameboy->settings.drawEnabled) {
+            if(!mgrGetFastForward() || fastForwardCounter++ >= configGetMultiChoice(GROUP_DISPLAY, DISPLAY_FF_FRAME_SKIP)) {
                 fastForwardCounter = 0;
                 gfxDrawScreen();
             }
@@ -1068,17 +1273,21 @@ void mgrRun() {
 
         time = std::chrono::high_resolution_clock::now();
         if(std::chrono::duration_cast<std::chrono::seconds>(time - lastPrintTime).count() > 0) {
-            if(!menuOn && !showConsoleDebug() && (fpsOutput || timeOutput)) {
+            u8 mode = configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_CONSOLE_OUTPUT);
+            bool showFPS = mode == CONSOLE_OUTPUT_FPS || mode == CONSOLE_OUTPUT_FPS_TIME;
+            bool showTime = mode == CONSOLE_OUTPUT_TIME || mode == CONSOLE_OUTPUT_FPS_TIME;
+
+            if(!menuIsVisible() && (showFPS || showTime)) {
                 uiClear();
                 int fpsLength = 0;
-                if(fpsOutput) {
+                if(showFPS) {
                     char buffer[16];
                     snprintf(buffer, 16, "FPS: %d", fps);
                     uiPrint("%s", buffer);
                     fpsLength = (int) strlen(buffer);
                 }
 
-                if(timeOutput) {
+                if(showTime) {
                     time_t timet = (time_t) std::chrono::duration_cast<std::chrono::seconds>(time.time_since_epoch()).count();
                     char *timeString = ctime(&timet);
                     for(int i = 0; ; i++) {
@@ -1091,10 +1300,10 @@ void mgrRun() {
                     char timeDisplay[6] = {0};
                     strncpy(timeDisplay, timeString, 5);
 
-                    int width = 0;
-                    uiGetSize(&width, NULL);
+                    u32 width = 0;
+                    uiGetSize(&width, nullptr);
 
-                    int spaces = width - (int) strlen(timeDisplay) - fpsLength;
+                    int spaces = (int) width - strlen(timeDisplay) - fpsLength;
                     for(int i = 0; i < spaces; i++) {
                         uiPrint(" ");
                     }

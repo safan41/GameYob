@@ -1,7 +1,8 @@
 #ifdef BACKEND_3DS
 
 #include <sys/unistd.h>
-#include <string.h>
+
+#include <cstring>
 
 #include <3ds.h>
 
@@ -26,7 +27,7 @@ void audioInit() {
 
     u32 bufSize = BUFFER_SAMPLES * NUM_BUFFERS * sizeof(u32);
     audioBuffer = (u32*) linearAlloc(bufSize);
-    if(audioBuffer == NULL) {
+    if(audioBuffer == nullptr) {
         audioCleanup();
         return;
     }
@@ -59,9 +60,9 @@ void audioCleanup() {
 
     ndspExit();
 
-    if(audioBuffer != NULL) {
+    if(audioBuffer != nullptr) {
         linearFree(audioBuffer);
-        audioBuffer = NULL;
+        audioBuffer = nullptr;
     }
 }
 

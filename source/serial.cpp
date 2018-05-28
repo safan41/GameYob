@@ -1,3 +1,6 @@
+#include <istream>
+#include <ostream>
+
 #include "cartridge.h"
 #include "cpu.h"
 #include "gameboy.h"
@@ -5,34 +8,28 @@
 #include "printer.h"
 #include "serial.h"
 
-Serial::Serial(Gameboy* gameboy) {
+Serial::Serial(Gameboy* gameboy) : printer(gameboy) {
     this->gameboy = gameboy;
-
-    this->printer = new Printer(gameboy);
-}
-
-Serial::~Serial() {
-    delete this->printer;
 }
 
 void Serial::reset() {
     this->nextSerialInternalCycle = 0;
     this->nextSerialExternalCycle = 0;
 
-    this->printer->reset();
+    this->printer.reset();
 
-    this->gameboy->mmu->mapIOWriteFunc(SC, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu->writeIO(SC, val);
+    this->gameboy->mmu.mapIOWriteFunc(SC, [this](u16 addr, u8 val) -> void {
+        this->gameboy->mmu.writeIO(SC, val);
 
         if((val & 0x81) == 0x81) { // Internal clock
             if(this->nextSerialInternalCycle == 0) {
                 if(this->gameboy->gbMode == MODE_CGB && (val & 0x02)) {
-                    this->nextSerialInternalCycle = this->gameboy->cpu->getCycle() + CYCLES_PER_SECOND / (1024 * 32);
+                    this->nextSerialInternalCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_SECOND / (1024 * 32);
                 } else {
-                    this->nextSerialInternalCycle = this->gameboy->cpu->getCycle() + CYCLES_PER_SECOND / 1024;
+                    this->nextSerialInternalCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_SECOND / 1024;
                 }
 
-                this->gameboy->cpu->setEventCycle(this->nextSerialInternalCycle);
+                this->gameboy->cpu.setEventCycle(this->nextSerialInternalCycle);
             }
         } else {
             this->nextSerialInternalCycle = 0;
@@ -40,70 +37,74 @@ void Serial::reset() {
     });
 }
 
-void Serial::loadState(std::istream& data, u8 version) {
-    data.read((char*) &this->nextSerialInternalCycle, sizeof(this->nextSerialInternalCycle));
-    data.read((char*) &this->nextSerialExternalCycle, sizeof(this->nextSerialExternalCycle));
-
-    this->printer->loadState(data, version);
-}
-
-void Serial::saveState(std::ostream& data) {
-    data.write((char*) &this->nextSerialInternalCycle, sizeof(this->nextSerialInternalCycle));
-    data.write((char*) &this->nextSerialExternalCycle, sizeof(this->nextSerialExternalCycle));
-
-    this->printer->saveState(data);
-}
-
 void Serial::update() {
-    if(this->gameboy->settings.printerEnabled) {
-        this->printer->update();
+    if(this->gameboy->settings.getOption(GB_OPT_PRINTER_ENABLED)) {
+        this->printer.update();
     }
 
     // For external clock
     if(this->nextSerialExternalCycle > 0) {
-        if(this->gameboy->cpu->getCycle() >= this->nextSerialExternalCycle) {
-            u8 sc = this->gameboy->mmu->readIO(SC);
+        if(this->gameboy->cpu.getCycle() >= this->nextSerialExternalCycle) {
+            u8 sc = this->gameboy->mmu.readIO(SC);
 
             u8 received = 0xFF;
             if((sc & 0x81) == 0x80) {
                 // TODO: Receive/Send
             }
 
-            this->gameboy->mmu->writeIO(SB, received);
+            this->gameboy->mmu.writeIO(SB, received);
 
             if(sc & 0x80) {
-                this->gameboy->mmu->writeIO(SC, (u8) (sc & ~0x80));
+                this->gameboy->mmu.writeIO(SC, (u8) (sc & ~0x80));
 
-                this->gameboy->mmu->writeIO(IF, (u8) (this->gameboy->mmu->readIO(IF) | INT_SERIAL));
+                this->gameboy->mmu.writeIO(IF, (u8) (this->gameboy->mmu.readIO(IF) | INT_SERIAL));
             }
 
             this->nextSerialExternalCycle = 0;
         } else {
-            this->gameboy->cpu->setEventCycle(this->nextSerialExternalCycle);
+            this->gameboy->cpu.setEventCycle(this->nextSerialExternalCycle);
         }
     }
 
     // For internal clock
     if(this->nextSerialInternalCycle > 0) {
-        if(this->gameboy->cpu->getCycle() >= this->nextSerialInternalCycle) {
-            u8 sc = this->gameboy->mmu->readIO(SC);
-            u8 sb = this->gameboy->mmu->readIO(SB);
+        if(this->gameboy->cpu.getCycle() >= this->nextSerialInternalCycle) {
+            u8 sc = this->gameboy->mmu.readIO(SC);
+            u8 sb = this->gameboy->mmu.readIO(SB);
 
             u8 received = 0xFF;
-            if(this->gameboy->settings.printerEnabled && (this->gameboy->cartridge == NULL || this->gameboy->cartridge->getRomTitle().compare("ALLEY WAY") != 0)) { // Alleyway breaks when the printer is enabled, so force disable it.
-                received = this->printer->link(sb);
+            if(this->gameboy->settings.getOption(GB_OPT_PRINTER_ENABLED) && (this->gameboy->cartridge == nullptr || this->gameboy->cartridge->getRomTitle().compare("ALLEY WAY") != 0)) { // Alleyway breaks when the printer is enabled, so force disable it.
+                received = this->printer.link(sb);
             } else {
                 // TODO: Send/Receive
             }
 
-            this->gameboy->mmu->writeIO(SB, received);
-            this->gameboy->mmu->writeIO(SC, (u8) (sc & ~0x80));
+            this->gameboy->mmu.writeIO(SB, received);
+            this->gameboy->mmu.writeIO(SC, (u8) (sc & ~0x80));
 
-            this->gameboy->mmu->writeIO(IF, (u8) (this->gameboy->mmu->readIO(IF) | INT_SERIAL));
+            this->gameboy->mmu.writeIO(IF, (u8) (this->gameboy->mmu.readIO(IF) | INT_SERIAL));
 
             this->nextSerialInternalCycle = 0;
         } else {
-            this->gameboy->cpu->setEventCycle(this->nextSerialInternalCycle);
+            this->gameboy->cpu.setEventCycle(this->nextSerialInternalCycle);
         }
     }
+}
+
+std::istream& operator>>(std::istream& is, Serial& serial) {
+    is.read((char*) &serial.nextSerialInternalCycle, sizeof(serial.nextSerialInternalCycle));
+    is.read((char*) &serial.nextSerialExternalCycle, sizeof(serial.nextSerialExternalCycle));
+
+    is >> serial.printer;
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const Serial& serial) {
+    os.write((char*) &serial.nextSerialInternalCycle, sizeof(serial.nextSerialInternalCycle));
+    os.write((char*) &serial.nextSerialExternalCycle, sizeof(serial.nextSerialExternalCycle));
+
+    os << serial.printer;
+
+    return os;
 }

@@ -1,26 +1,20 @@
 #ifdef BACKEND_SWITCH
 
-#include <string.h>
-#include <time.h>
-
-#include <fstream>
-#include <sstream>
+#include <cstring>
 
 #include <switch.h>
 
 #include "platform/common/menu/menu.h"
+#include "platform/common/config.h"
 #include "platform/gfx.h"
 #include "platform/system.h"
+#include "ppu.h"
 
-#define SCREEN_BUFFER_WIDTH 256
-#define SCREEN_BUFFER_HEIGHT 224
-#define SCREEN_BUFFER_PIXELS (SCREEN_BUFFER_WIDTH * SCREEN_BUFFER_HEIGHT)
-#define SCREEN_BUFFER_SIZE (SCREEN_BUFFER_PIXELS * sizeof(u32))
+#define GB_FRAME_PIXELS (GB_FRAME_WIDTH * GB_FRAME_HEIGHT)
 
-#define SCALE2X_BUFFER_WIDTH 512
-#define SCALE2X_BUFFER_HEIGHT 448
-#define SCALE2X_BUFFER_PIXELS (SCALE2X_BUFFER_WIDTH * SCALE2X_BUFFER_HEIGHT)
-#define SCALE2X_BUFFER_SIZE (SCALE2X_BUFFER_PIXELS * sizeof(u32))
+#define GB_FRAME_2X_WIDTH (GB_FRAME_WIDTH * 2)
+#define GB_FRAME_2X_HEIGHT (GB_FRAME_HEIGHT * 2)
+#define GB_FRAME_2X_PIXELS (GB_FRAME_2X_WIDTH * GB_FRAME_2X_HEIGHT)
 
 static u32* borderBuffer;
 static u32 borderWidth;
@@ -32,61 +26,65 @@ static u32* scale2xBuffer;
 bool gfxInit() {
     gfxInitDefault();
 
-    borderBuffer = NULL;
+    borderBuffer = nullptr;
 
-    screenBuffer = (u32*) calloc(SCREEN_BUFFER_PIXELS, sizeof(u32));
-    if(screenBuffer == NULL) {
+    screenBuffer = (u32*) calloc(GB_FRAME_PIXELS, sizeof(u32));
+    if(screenBuffer == nullptr) {
         return false;
     }
 
-    memset(screenBuffer, 0, SCREEN_BUFFER_SIZE);
-
-    scale2xBuffer = (u32*) calloc(SCALE2X_BUFFER_PIXELS, sizeof(u32));
-    if(scale2xBuffer == NULL) {
+    scale2xBuffer = (u32*) calloc(GB_FRAME_2X_PIXELS, sizeof(u32));
+    if(scale2xBuffer == nullptr) {
         free(screenBuffer);
-        screenBuffer = NULL;
+        screenBuffer = nullptr;
 
         return false;
     }
-
-    memset(scale2xBuffer, 0, SCALE2X_BUFFER_SIZE);
 
     return true;
 }
 
 void gfxCleanup() {
-    if(scale2xBuffer != NULL) {
+    if(scale2xBuffer != nullptr) {
         free(scale2xBuffer);
-        scale2xBuffer = NULL;
+        scale2xBuffer = nullptr;
     }
 
-    if(screenBuffer != NULL) {
+    if(screenBuffer != nullptr) {
         free(screenBuffer);
-        screenBuffer = NULL;
+        screenBuffer = nullptr;
     }
 
     gfxExit();
 }
 
+u32* gfxGetScreenBuffer() {
+    return screenBuffer;
+}
+
+u32 gfxGetScreenPitch() {
+    return GB_FRAME_WIDTH;
+}
+
 void gfxLoadBorder(u8* imgData, int imgWidth, int imgHeight) {
-    if(imgData == NULL || (borderBuffer != NULL && (borderWidth != (u32) imgWidth || borderHeight != (u32) imgHeight))) {
-        if(borderBuffer != NULL) {
+    if(imgData == nullptr || (borderBuffer != nullptr && (borderWidth != (u32) imgWidth || borderHeight != (u32) imgHeight))) {
+        if(borderBuffer != nullptr) {
             free(borderBuffer);
-            borderBuffer = NULL;
+            borderBuffer = nullptr;
         }
 
         borderWidth = 0;
         borderHeight = 0;
 
-        if(imgData == NULL) {
+        if(imgData == nullptr) {
             return;
         }
     }
 
     // Create the texture buffer.
-    if(borderBuffer == NULL) {
+    if(borderBuffer == nullptr) {
         borderBuffer = (u32*) malloc(imgWidth * imgHeight * sizeof(u32));
-        if(borderBuffer == NULL) {
+        if(borderBuffer == nullptr) {
             return;
         }
     }
@@ -95,65 +93,6 @@ void gfxLoadBorder(u8* imgData, int imgWidth, int imgHeight) {
     borderHeight = (u32) imgHeight;
 
     memcpy(borderBuffer, imgData, borderWidth * borderHeight * sizeof(u32));
-}
-
-u32* gfxGetScreenBuffer() {
-    return screenBuffer;
-}
-
-u32 gfxGetScreenPitch() {
-    return SCREEN_BUFFER_WIDTH;
-}
-
-void gfxTakeScreenshot() {
-    u32 width = 0;
-    u32 height = 0;
-    u8* fb = gfxGetFramebuffer(&height, &width);
-
-    if(fb == NULL) {
-        return;
-    }
-
-    u32 headerSize = 0x36;
-    u32 imageSize = width * height * 3;
-
-    u8* header = new u8[headerSize]();
-
-    *(u16*) &header[0x0] = 0x4D42;
-    *(u32*) &header[0x2] = headerSize + imageSize;
-    *(u32*) &header[0xA] = headerSize;
-    *(u32*) &header[0xE] = 0x28;
-    *(u32*) &header[0x12] = width;
-    *(u32*) &header[0x16] = height;
-    *(u32*) &header[0x1A] = 0x00180001;
-    *(u32*) &header[0x22] = imageSize;
-
-    u8* image = new u8[imageSize]();
-
-    for(u32 x = 0; x < width; x++) {
-        for(u32 y = 0; y < height; y++) {
-            u8* src = &fb[(x * height + y) * 3];
-            u8* dst = &image[(y * width + x) * 3];
-
-            *(u16*) dst = *(u16*) src;
-            dst[2] = src[2];
-        }
-    }
-
-    std::stringstream fileStream;
-    fileStream << "/gameyob_" << time(NULL) << ".bmp";
-
-    std::ofstream stream(fileStream.str(), std::ios::binary);
-    if(stream.is_open()) {
-        stream.write((char*) header, (size_t) headerSize);
-        stream.write((char*) image, (size_t) imageSize);
-        stream.close();
-    } else {
-        systemPrintDebug("Failed to open screenshot file: %s\n", strerror(errno));
-    }
-
-    delete[] header;
-    delete[] image;
 }
 
 #define SEEK_PIXEL(buf, x, y, pitch) ((buf) + ((((y) * (pitch)) + (x))))
@@ -267,42 +206,70 @@ void gfxScale2xRGBA8888(u32* src, u32 srcPitch, u32* dst, u32 dstPitch, int widt
     DO_SCALE2X();
 }
 
+static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u32 viewportWidth, u32 viewportHeight) {
+    u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
+
+    *scaleWidth = 1;
+    *scaleHeight = 1;
+
+    if(scaleMode == SCALING_MODE_125) {
+        *scaleWidth = *scaleHeight = 1.25f;
+    } else if(scaleMode == SCALING_MODE_150) {
+        *scaleWidth = *scaleHeight = 1.50f;
+    } else if(scaleMode == SCALING_MODE_ASPECT) {
+        *scaleWidth = *scaleHeight = viewportHeight / (float) GB_SCREEN_HEIGHT;
+    } else if(scaleMode == SCALING_MODE_FULL) {
+        *scaleWidth = viewportWidth / (float) GB_SCREEN_WIDTH;
+        *scaleHeight = viewportHeight / (float) GB_SCREEN_HEIGHT;
+    }
+}
+
 void gfxDrawScreen() {
-    u32 screenTexWidth = SCREEN_BUFFER_WIDTH;
-    u32 screenTexHeight = SCREEN_BUFFER_HEIGHT;
+    u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
+    u8 scaleFilter = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_FILTER);
+
+    u32 screenTexWidth = GB_FRAME_WIDTH;
+    u32 screenTexHeight = GB_FRAME_HEIGHT;
     u32* transferBuffer = screenBuffer;
 
-    if(scaleMode != 0 && scaleFilter == 2) {
-        screenTexWidth = SCALE2X_BUFFER_WIDTH;
-        screenTexHeight = SCALE2X_BUFFER_HEIGHT;
+    if(scaleMode != SCALING_MODE_OFF && scaleFilter == SCALING_FILTER_SCALE2X) {
+        screenTexWidth = GB_FRAME_2X_WIDTH;
+        screenTexHeight = GB_FRAME_2X_HEIGHT;
         transferBuffer = scale2xBuffer;
 
-        gfxScale2xRGBA8888(screenBuffer, SCREEN_BUFFER_WIDTH, scale2xBuffer, SCALE2X_BUFFER_WIDTH, SCREEN_BUFFER_WIDTH, SCREEN_BUFFER_HEIGHT);
+        gfxScale2xRGBA8888(screenBuffer, GB_FRAME_WIDTH, scale2xBuffer, GB_FRAME_2X_WIDTH, GB_FRAME_WIDTH, GB_FRAME_HEIGHT);
     }
 
     u32 viewportWidth = 0;
     u32 viewportHeight = 0;
     u32* framebuffer = (u32*) gfxGetFramebuffer(&viewportWidth, &viewportHeight);
 
+    float scaleWidth = 1;
+    float scaleHeight = 1;
+    gfxScaleDimensions(&scaleWidth, &scaleHeight, viewportWidth, viewportHeight);
+
+    // TODO: Flip draw order when transparency is supported.
+
     // Draw the border.
-    if(borderBuffer != NULL && scaleMode != 4) {
+    if(borderBuffer != nullptr && scaleMode != SCALING_MODE_FULL) {
         // Calculate output dimensions.
         u32 scaledBorderWidth = borderWidth;
         u32 scaledBorderHeight = borderHeight;
+        if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS_SCALING) == CUSTOM_BORDERS_SCALING_SCALE_BASE) {
+            scaledBorderWidth *= scaleWidth;
+            scaledBorderHeight *= scaleHeight;
+        }
 
-        if(borderScaleMode == 1) {
-            if(scaleMode == 1) {
+        if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS_SCALING) == CUSTOM_BORDERS_SCALING_SCALE_BASE) {
+            if(scaleMode == SCALING_MODE_125) {
                 scaledBorderWidth *= 1.25f;
                 scaledBorderHeight *= 1.25f;
-            } else if(scaleMode == 2) {
+            } else if(scaleMode == SCALING_MODE_150) {
                 scaledBorderWidth *= 1.50f;
                 scaledBorderHeight *= 1.50f;
-            } else if(scaleMode == 3) {
-                scaledBorderWidth *= viewportHeight / (float) SCREEN_BUFFER_HEIGHT;
-                scaledBorderHeight *= viewportHeight / (float) SCREEN_BUFFER_HEIGHT;
-            } else if(scaleMode == 4) {
-                scaledBorderWidth *= viewportWidth / (float) SCREEN_BUFFER_WIDTH;
-                scaledBorderHeight *= viewportHeight / (float) SCREEN_BUFFER_HEIGHT;
+            } else if(scaleMode == SCALING_MODE_ASPECT) {
+                scaledBorderWidth *= viewportHeight / (float) GB_FRAME_HEIGHT;
+                scaledBorderHeight *= viewportHeight / (float) GB_FRAME_HEIGHT;
             }
         }
 
@@ -320,22 +287,8 @@ void gfxDrawScreen() {
     // Draw the screen.
     {
         // Calculate output dimensions.
-        u32 screenWidth = SCREEN_BUFFER_WIDTH;
-        u32 screenHeight = SCREEN_BUFFER_HEIGHT;
-
-        if(scaleMode == 1) {
-            screenWidth *= 1.25f;
-            screenHeight *= 1.25f;
-        } else if(scaleMode == 2) {
-            screenWidth *= 1.50f;
-            screenHeight *= 1.50f;
-        } else if(scaleMode == 3) {
-            screenWidth *= viewportHeight / (float) screenHeight;
-            screenHeight = viewportHeight;
-        } else if(scaleMode == 4) {
-            screenWidth = viewportWidth;
-            screenHeight = viewportHeight;
-        }
+        u32 screenWidth = (u32) (GB_FRAME_WIDTH * scaleWidth);
+        u32 screenHeight = (u32) (GB_FRAME_HEIGHT * scaleHeight);
 
         // Calculate output points.
         const u32 x1 = ((int) viewportWidth - screenWidth) / 2;

@@ -4,12 +4,13 @@
 
 #include <vector>
 
-#define MAX_CHEATS            900
-#define CHEAT_FLAG_ENABLED    (1<<0)
-#define CHEAT_FLAG_TYPE_MASK  (3<<2)
-#define CHEAT_FLAG_GAMEGENIE  (1<<2)
-#define CHEAT_FLAG_GAMEGENIE1 (2<<2)
-#define CHEAT_FLAG_GAMESHARK  (3<<2)
+class Gameboy;
+
+#define CHEAT_FLAG_ENABLED    (1 << 0)
+#define CHEAT_FLAG_TYPE_MASK  (3 << 1)
+#define CHEAT_FLAG_GAMEGENIE  (1 << 1)
+#define CHEAT_FLAG_GAMEGENIE1 (2 << 1)
+#define CHEAT_FLAG_GAMESHARK  (3 << 1)
 
 typedef struct cheat_t {
     std::string name;
@@ -21,11 +22,9 @@ typedef struct cheat_t {
         u8 compare; /* For GameGenie codes */
         u8 bank;    /* For Gameshark codes */
     };
-    std::vector<int> patchedBanks;  /* For GameGenie codes */
-    std::vector<int> patchedValues; /* For GameGenie codes */
+    std::vector<u16> patchedBanks;  /* For GameGenie codes */
+    std::vector<u8> patchedValues; /* For GameGenie codes */
 } cheat_t;
-
-class Gameboy;
 
 class CheatEngine {
 public:
@@ -34,23 +33,22 @@ public:
     void loadCheats(const std::string& filename);
     void saveCheats(const std::string& filename);
 
-    inline int getNumCheats() { return numCheats; }
+    inline u32 getNumCheats() { return (u32) cheatsVec.size(); }
 
-    inline const std::string& getCheatName(int cheat) { return cheats[cheat].name; }
-    inline bool isCheatEnabled(int cheat) { return (cheats[cheat].flags & CHEAT_FLAG_ENABLED) != 0; }
+    inline const std::string getCheatName(u32 cheat) { return cheatsVec[cheat].name; }
+    inline bool isCheatEnabled(u32 cheat) { return (cheatsVec[cheat].flags & CHEAT_FLAG_ENABLED) != 0; }
 
     bool addCheat(const std::string& name, const std::string& value);
-    void toggleCheat(int cheat, bool enabled);
-
-    void applyGGCheatsToBank(int romBank);
-    void unapplyGGCheat(int cheat);
+    void toggleCheat(u32 cheat, bool enabled);
 
     void applyGSCheats();
 private:
-    cheat_t cheats[MAX_CHEATS];
-    int numCheats;
-
     Gameboy* gameboy;
+
+    std::vector<cheat_t> cheatsVec;
+
+    void applyGGCheatsToBank(u16 romBank);
+    void unapplyGGCheat(u32 cheat);
 
     static int parseCheats(void* user, const char* section, const char* name, const char* value);
 };
