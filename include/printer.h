@@ -23,6 +23,8 @@ private:
 
     Gameboy* gameboy;
 
+    bool forceDisable;
+
     u8 gfx[PRINTER_WIDTH * PRINTER_HEIGHT / 4];
     u16 gfxIndex;
 

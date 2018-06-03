@@ -17,6 +17,8 @@ public:
     void reset();
     void run();
 
+    void write(u16 addr, u8 val);
+
     friend std::istream& operator>>(std::istream& is, CPU& cpu);
     friend std::ostream& operator<<(std::ostream& os, const CPU& cpu);
 

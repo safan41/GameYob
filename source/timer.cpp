@@ -17,45 +17,6 @@ Timer::Timer(Gameboy* gameboy) {
 void Timer::reset() {
     this->lastDividerCycle = 0;
     this->lastTimerCycle = 0;
-
-    auto genericTimerRead = [this](u16 addr) -> u8 {
-        this->update();
-        return this->gameboy->mmu.readIO(addr);
-    };
-
-    auto genericTimerWrite = [this](u16 addr, u8 val) -> void {
-        this->update();
-        this->gameboy->mmu.writeIO(addr, val);
-    };
-
-    this->gameboy->mmu.mapIOReadFunc(DIV, [this](u16 addr) -> u8 {
-        this->gameboy->mmu.writeIO(DIV, (u8) ((this->gameboy->mmu.readIO(DIV) + ((this->gameboy->cpu.getCycle() - this->lastDividerCycle) >> 8)) & 0xFF));
-        this->lastDividerCycle = this->gameboy->cpu.getCycle() & ~0xFF;
-
-        return this->gameboy->mmu.readIO(DIV);
-    });
-
-    this->gameboy->mmu.mapIOReadFunc(TIMA, genericTimerRead);
-    this->gameboy->mmu.mapIOReadFunc(TMA, genericTimerRead);
-    this->gameboy->mmu.mapIOReadFunc(TAC, genericTimerRead);
-
-    this->gameboy->mmu.mapIOWriteFunc(DIV, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(DIV, 0);
-
-        this->lastDividerCycle = this->gameboy->cpu.getCycle() & ~0xFF;
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(TIMA, genericTimerWrite);
-    this->gameboy->mmu.mapIOWriteFunc(TMA, genericTimerWrite);
-
-    this->gameboy->mmu.mapIOWriteFunc(TAC, [this](u16 addr, u8 val) -> void {
-        this->update();
-        this->gameboy->mmu.writeIO(TAC, (u8) (val | 0xF8));
-
-        u8 shift = timerShifts[val & 0x3];
-        this->lastTimerCycle = this->gameboy->cpu.getCycle() >> shift << shift;
-        this->gameboy->cpu.setEventCycle(this->lastTimerCycle + ((0x100 - this->gameboy->mmu.readIO(TIMA)) << shift));
-    });
 }
 
 void Timer::update() {
@@ -80,6 +41,54 @@ void Timer::update() {
         }
 
         this->gameboy->cpu.setEventCycle(this->lastTimerCycle + ((0x100 - this->gameboy->mmu.readIO(TIMA)) << shift));
+    }
+}
+
+u8 Timer::read(u16 addr) {
+    switch(addr) {
+        case DIV: {
+            u8 div = (this->gameboy->mmu.readIO(DIV) + ((this->gameboy->cpu.getCycle() - this->lastDividerCycle) >> 8)) & 0xFF;
+
+            this->gameboy->mmu.writeIO(DIV, div);
+            this->lastDividerCycle = this->gameboy->cpu.getCycle() & ~0xFF;
+
+            return div;
+        }
+        case TIMA:
+        case TMA:
+        case TAC:
+            this->update();
+            return this->gameboy->mmu.readIO(addr);
+        default:
+            return 0xFF;
+    }
+}
+
+void Timer::write(u16 addr, u8 val) {
+    switch(addr) {
+        case DIV:
+            this->gameboy->mmu.writeIO(DIV, 0);
+            this->lastDividerCycle = this->gameboy->cpu.getCycle() & ~0xFF;
+
+            break;
+        case TIMA:
+        case TMA:
+            this->update();
+            this->gameboy->mmu.writeIO(addr, val);
+
+            break;
+        case TAC: {
+            this->update();
+            this->gameboy->mmu.writeIO(TAC, (u8) (val | 0xF8));
+
+            u8 shift = timerShifts[val & 0x3];
+            this->lastTimerCycle = this->gameboy->cpu.getCycle() >> shift << shift;
+            this->gameboy->cpu.setEventCycle(this->lastTimerCycle + ((0x100 - this->gameboy->mmu.readIO(TIMA)) << shift));
+
+            break;
+        }
+        default:
+            break;
     }
 }
 

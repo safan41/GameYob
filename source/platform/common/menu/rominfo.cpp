@@ -19,6 +19,7 @@ void RomInfoMenu::draw(u32 width, u32 height) {
         Cartridge* cartridge = mgrGetRom();
 
         uiPrint("ROM Title: \"%s\"\n", cartridge->getRomTitle().c_str());
+        uiPrint("SGB: Supported: %d\n", cartridge->isSgbEnhanced());
         uiPrint("CGB: Supported: %d, Required: %d\n", cartridge->isCgbSupported(), cartridge->isCgbRequired());
         uiPrint("Cartridge type: %.2x (%s)\n", cartridge->getRawMBC(), mbcNames[cartridge->getMBCType()]);
         uiPrint("ROM Size: %.2x (%" PRIu32 " banks)\n", cartridge->getRawRomSize(), cartridge->getRomBanks());

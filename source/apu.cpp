@@ -23,24 +23,6 @@ void APU::reset() {
 
     this->lastSoundCycle = 0;
     this->halfSpeed = false;
-
-    auto read = [this](u16 addr) -> u8 {
-        return (u8) this->apu.read_register((u32) (this->gameboy->cpu.getCycle() - this->lastSoundCycle) >> this->halfSpeed, addr);
-    };
-
-    auto write = [this](u16 addr, u8 val) -> void {
-        this->apu.write_register((u32) (this->gameboy->cpu.getCycle() - this->lastSoundCycle) >> this->halfSpeed, addr, val);
-    };
-
-    for(u16 regAddr = NR10; regAddr <= WAVEF; regAddr++) {
-        this->gameboy->mmu.mapIOReadFunc(regAddr, read);
-        this->gameboy->mmu.mapIOWriteFunc(regAddr, write);
-    }
-
-    for(u16 regAddr = PCM12; regAddr <= PCM34; regAddr++) {
-        this->gameboy->mmu.mapIOReadFunc(regAddr, read);
-        this->gameboy->mmu.mapIOWriteFunc(regAddr, write);
-    }
 }
 
 void APU::update() {
@@ -66,6 +48,14 @@ void APU::update() {
     }
 
     this->gameboy->cpu.setEventCycle(this->lastSoundCycle + (CYCLES_PER_FRAME << this->halfSpeed));
+}
+
+u8 APU::read(u16 addr) {
+    return (u8) this->apu.read_register((u32) (this->gameboy->cpu.getCycle() - this->lastSoundCycle) >> this->halfSpeed, addr);
+}
+
+void APU::write(u16 addr, u8 val) {
+    this->apu.write_register((u32) (this->gameboy->cpu.getCycle() - this->lastSoundCycle) >> this->halfSpeed, addr, val);
 }
 
 void APU::setHalfSpeed(bool halfSpeed) {

@@ -17,6 +17,7 @@ void SGB::reset() {
     this->packetsTransferred = 0;
     this->packetBit = 0xFF;
     memset(this->packet, 0, sizeof(this->packet));
+
     this->command = 0;
     memset(&this->cmdData, 0, sizeof(this->cmdData));
 
@@ -34,102 +35,6 @@ void SGB::reset() {
 
     this->mask = 0;
     memset(this->paletteMap, 0, sizeof(this->paletteMap));
-
-    this->gameboy->mmu.mapIOReadFunc(JOYP, [this](u16 addr) -> u8 {
-        u8 joyp = this->gameboy->mmu.readIO(JOYP);
-
-        if(this->gameboy->gbMode == MODE_SGB && (joyp & 0x30) == 0x30) {
-            return (u8) (0xFF - this->selectedController);
-        }
-
-        if(!(joyp & 0x20)) {
-            return (u8) (0xC0 | (joyp & 0xF0) | (this->controllers[this->selectedController] & 0xF));
-        } else if(!(joyp & 0x10)) {
-            return (u8) (0xC0 | (joyp & 0xF0) | ((this->controllers[this->selectedController] & 0xF0) >> 4));
-        } else {
-            return (u8) (joyp | 0xCF);
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(JOYP, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode != MODE_SGB) {
-            this->gameboy->mmu.writeIO(JOYP, val);
-            return;
-        }
-
-        if((val & 0x30) == 0) {
-            // Start packet transfer
-            this->packetBit = 0;
-            this->gameboy->mmu.writeIO(JOYP, 0xCF);
-            return;
-        }
-
-        if(this->packetBit != 0xFF) {
-            u8 oldJoyp = this->gameboy->mmu.readIO(JOYP);
-            this->gameboy->mmu.writeIO(JOYP, val);
-
-            u8 shift = this->packetBit & 0x7;
-            u8 byte = (this->packetBit >> 3) & 0xF;
-            if(shift == 0) {
-                this->packet[byte] = 0;
-            }
-
-            if((oldJoyp & 0x30) == 0 && (val & 0x30) != 0x30) { // A bit of speculation here. Fixes Castlevania.
-                this->packetBit = 0xFF;
-                return;
-            }
-
-            u8 bit;
-            if(!(val & 0x10)) {
-                bit = 0;
-            } else if(!(val & 0x20)) {
-                bit = 1;
-            } else {
-                return;
-            }
-
-            this->packet[byte] |= bit << shift;
-            this->packetBit++;
-            if(this->packetBit == 0x80) {
-                if(this->packetsTransferred == 0) {
-                    this->command = this->packet[0] >> 3;
-                    this->packetLength = this->packet[0] & 7;
-                }
-
-                if(this->sgbCommands[this->command] != nullptr) {
-                    (this->*sgbCommands[this->command])();
-                }
-
-                this->packetBit = 0xFF;
-                this->packetsTransferred++;
-                if(this->packetsTransferred == this->packetLength) {
-                    this->packetLength = 0;
-                    this->packetsTransferred = 0;
-                }
-            }
-        } else {
-            if((val & 0x30) == 0x30) {
-                if(this->buttonsChecked == 3) {
-                    this->selectedController++;
-                    if(this->selectedController >= this->numControllers) {
-                        this->selectedController = 0;
-                    }
-
-                    this->buttonsChecked = 0;
-                }
-
-                this->gameboy->mmu.writeIO(JOYP, (u8) (0xFF - this->selectedController));
-            } else {
-                if((val & 0x30) == 0x10) {
-                    this->buttonsChecked |= 1;
-                } else if((val & 0x30) == 0x20) {
-                    this->buttonsChecked |= 2;
-                }
-
-                this->gameboy->mmu.writeIO(JOYP, (u8) (val | 0xCF));
-            }
-        }
-    });
 }
 
 void SGB::update() {
@@ -137,16 +42,109 @@ void SGB::update() {
 
     u8 joyp = this->gameboy->mmu.readIO(JOYP);
     if(!(joyp & 0x10)) {
-        if((this->controllers[0] & 0xf0) != 0xf0) {
+        if((this->controllers[0] & 0xF0) != 0xF0) {
             interrupts |= INT_JOYPAD;
         }
     } else if(!(joyp & 0x20)) {
-        if((this->controllers[0] & 0x0f) != 0x0f) {
+        if((this->controllers[0] & 0x0F) != 0x0F) {
             interrupts |= INT_JOYPAD;
         }
     }
 
     this->gameboy->mmu.writeIO(IF, interrupts);
+}
+
+void SGB::write(u16 addr, u8 val) {
+    if(addr == JOYP) {
+        if(this->gameboy->gbMode == MODE_SGB) {
+            if((val & 0x30) == 0) {
+                // Start packet transfer.
+
+                this->packetBit = 0;
+            } else if(this->packetBit != 0xFF) {
+                // Process packet bit.
+
+                u8 shift = this->packetBit & 0x7;
+                u8 byte = (this->packetBit >> 3) & 0xF;
+                if(shift == 0) {
+                    // Just began a byte; initialize to zero.
+                    this->packet[byte] = 0;
+                }
+
+                // 0x30 = No Data.
+                if((val & 0x30) != 0x30) {
+                    u8 oldJoyp = this->gameboy->mmu.readIO(JOYP);
+
+                    if((oldJoyp & 0x30) != 0) { // A bit of speculation here. Fixes Castlevania.
+                        this->packet[byte] |= (val & 0x10) == 0 ? 0 : 1 << shift;
+                        this->packetBit++;
+
+                        // 128 (0x80) bits to a packet.
+                        if(this->packetBit == 0x80) {
+                            if(this->packetsTransferred == 0) {
+                                this->command = this->packet[0] >> 3;
+                                this->packetLength = this->packet[0] & 7;
+                            }
+
+                            if(this->sgbCommands[this->command] != nullptr) {
+                                (this->*sgbCommands[this->command])();
+                            }
+
+                            // End packet transfer.
+                            this->packetBit = 0xFF;
+                            this->packetsTransferred++;
+
+                            if(this->packetsTransferred == this->packetLength) {
+                                this->packetLength = 0;
+                                this->packetsTransferred = 0;
+                            }
+                        }
+                    } else {
+                        // End packet transfer.
+                        this->packetBit = 0xFF;
+                    }
+                }
+            } else {
+                // Keep track of bits for controller change commands.
+                if((val & 0x30) == 0x10) {
+                    this->buttonsChecked |= 1;
+                } else if((val & 0x30) == 0x20) {
+                    this->buttonsChecked |= 2;
+                } else if((val & 0x30) == 0x30 && this->buttonsChecked == 3) {
+                    this->selectedController++;
+                    if(this->selectedController >= this->numControllers) {
+                        this->selectedController = 0;
+                    }
+
+                    this->buttonsChecked = 0;
+                }
+            }
+        }
+
+        this->gameboy->mmu.writeIO(JOYP, val);
+
+        // Update input bits.
+        this->setController(this->selectedController, this->controllers[this->selectedController]);
+    }
+}
+
+void SGB::setController(u8 controller, u8 val) {
+    this->controllers[controller] = val;
+
+    if(controller == this->selectedController) {
+        u8 joyp = this->gameboy->mmu.readIO(JOYP);
+
+        u8 inputBits = 0xF;
+        if((joyp & 0x20) == 0) {
+            inputBits = this->controllers[controller] & 0x0F;
+        } else if((joyp & 0x10) == 0) {
+            inputBits = (this->controllers[controller] & 0xF0) >> 4;
+        } else if(this->gameboy->gbMode == MODE_SGB) {
+            inputBits = (~this->selectedController) & 0x0F;
+        }
+
+        this->gameboy->mmu.writeIO(JOYP, 0xC0 | (joyp & 0x30) | inputBits);
+    }
 }
 
 std::istream& operator>>(std::istream& is, SGB& sgb) {
@@ -557,6 +555,9 @@ void SGB::dataTrn() {
 void SGB::mltReq() {
     this->numControllers = (u8) ((this->packet[1] & 3) + 1);
     this->selectedController = (u8) (this->numControllers > 1 ? 1 : 0);
+
+    // Update input bits.
+    this->setController(this->selectedController, this->controllers[this->selectedController]);
 }
 
 void SGB::jump() {

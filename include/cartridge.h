@@ -24,18 +24,40 @@ typedef enum : u8 {
     MBC_MAX
 } MBCType;
 
+class Cartridge;
+
+typedef void (Cartridge::*mbcWrite)(u16, u8);
+typedef u8 (Cartridge::*mbcRead)(u16);
+typedef void (Cartridge::*mbcUpdate)();
+
 class Cartridge {
 public:
-    Cartridge(std::istream& romData, u32 romSize, std::istream& saveData);
+    Cartridge(std::istream& romData, u32 romSize);
     ~Cartridge();
 
     void reset(Gameboy* gameboy);
-    void update();
 
+    void load(std::istream& data);
     void save(std::ostream& data);
 
     friend std::istream& operator>>(std::istream& is, Cartridge& cart);
     friend std::ostream& operator<<(std::ostream& os, const Cartridge& cart);
+
+    inline mbcRead getReadFunc() {
+        return this->readFunc;
+    }
+
+    inline mbcWrite getWriteFunc() {
+        return this->writeFunc;
+    }
+
+    inline mbcWrite getWriteSramFunc() {
+        return this->writeSramFunc;
+    }
+
+    inline mbcUpdate getUpdateFunc() {
+        return this->updateFunc;
+    }
 
     inline const std::string getRomTitle() {
         return this->romTitle;
@@ -47,6 +69,10 @@ public:
 
     inline bool isCgbRequired() {
         return this->rom[0x0143] == 0xC0;
+    }
+
+    inline bool isSgbEnhanced() {
+        return this->rom[0x146] == 0x03 && this->rom[0x014B] == 0x33;
     }
 
     inline u8 getRawRomSize() {
@@ -63,10 +89,6 @@ public:
 
     inline u8 getRamBanks() {
         return this->totalRamBanks;
-    }
-
-    inline bool isSgbEnhanced() {
-        return this->rom[0x146] == 0x03 && this->rom[0x014B] == 0x33;
     }
 
     inline u8 getRawMBC() {
@@ -94,12 +116,11 @@ private:
     void mapBanks();
 
     u8 m3r(u16 addr);
-    u8 m6r(u16 addr);
     u8 m7r(u16 addr);
     u8 h3r(u16 addr);
+    u8 t5r(u16 addr);
     u8 camr(u16 addr);
 
-    void m0w(u16 addr, u8 val);
     void m1w(u16 addr, u8 val);
     void m2w(u16 addr, u8 val);
     void m3w(u16 addr, u8 val);
@@ -110,7 +131,14 @@ private:
     void h1w(u16 addr, u8 val);
     void h3w(u16 addr, u8 val);
     void camw(u16 addr, u8 val);
-    void t5w(u16 addr, u8 val);
+
+    void m2ws(u16 addr, u8 val);
+    void m3ws(u16 addr, u8 val);
+    void m7ws(u16 addr, u8 val);
+    void mmm01ws(u16 addr, u8 val);
+    void h3ws(u16 addr, u8 val);
+    void t5ws(u16 addr, u8 val);
+    void camws(u16 addr, u8 val);
 
     void camu();
 
@@ -118,27 +146,23 @@ private:
 
     void latchClock();
 
-    typedef void (Cartridge::*mbcWrite)(u16, u8);
-    typedef u8 (Cartridge::*mbcRead)(u16);
-    typedef void (Cartridge::*mbcUpdate)();
-
     const mbcRead mbcReads[MBC_MAX] = {
             nullptr,
             nullptr,
             nullptr,
             &Cartridge::m3r,
             nullptr,
-            &Cartridge::m6r,
+            nullptr,
             &Cartridge::m7r,
             nullptr,
             nullptr,
             &Cartridge::h3r,
             &Cartridge::camr,
-            nullptr
+            &Cartridge::t5r
     };
 
     const mbcWrite mbcWrites[MBC_MAX] = {
-            &Cartridge::m0w,
+            nullptr,
             &Cartridge::m1w,
             &Cartridge::m2w,
             &Cartridge::m3w,
@@ -149,7 +173,22 @@ private:
             &Cartridge::h1w,
             &Cartridge::h3w,
             &Cartridge::camw,
-            &Cartridge::t5w
+            nullptr
+    };
+
+    const mbcWrite mbcSramWrites[MBC_MAX] = {
+            nullptr,
+            nullptr,
+            &Cartridge::m2ws,
+            &Cartridge::m3ws,
+            nullptr,
+            nullptr,
+            &Cartridge::m7ws,
+            &Cartridge::mmm01ws,
+            nullptr,
+            &Cartridge::h3ws,
+            &Cartridge::camws,
+            &Cartridge::t5ws
     };
 
     const mbcUpdate mbcUpdates[MBC_MAX] = {
@@ -180,6 +219,7 @@ private:
 
     mbcRead readFunc;
     mbcWrite writeFunc;
+    mbcWrite writeSramFunc;
     mbcUpdate updateFunc;
 
     u8* sram;
@@ -242,8 +282,10 @@ private:
     u8 cameraRegs[0x36];
 
     // TAMA5
-    u8 tama5CommandNumber;
-    u8 tama5RamByteSelect;
-    u8 tama5Commands[0x10];
-    u8 tama5RAM[0x100];
+    struct {
+        bool enabled;
+
+        u8 reg;
+        u8 registers[0x10];
+    } tama5;
 };

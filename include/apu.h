@@ -14,6 +14,9 @@ public:
     void reset();
     void update();
 
+    u8 read(u16 addr);
+    void write(u16 addr, u8 val);
+
     void setHalfSpeed(bool halfSpeed);
 
     friend std::istream& operator>>(std::istream& is, APU& apu);

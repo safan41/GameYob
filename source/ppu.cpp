@@ -115,183 +115,6 @@ void PPU::reset() {
     }
 
     this->mapBanks();
-
-    this->gameboy->mmu.mapIOReadFunc(BCPD, [this](u16 addr) -> u8 {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            return this->rawBgPalette[this->gameboy->mmu.readIO(BCPS) & 0x3F];
-        } else {
-            return this->gameboy->mmu.readIO(BCPD);
-        }
-    });
-
-    this->gameboy->mmu.mapIOReadFunc(OCPD, [this](u16 addr) -> u8 {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            return this->rawSprPalette[this->gameboy->mmu.readIO(OCPS) & 0x3F];
-        } else {
-            return this->gameboy->mmu.readIO(OCPD);
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(LCDC, [this](u16 addr, u8 val) -> void {
-        u8 curr = this->gameboy->mmu.readIO(LCDC);
-        this->gameboy->mmu.writeIO(LCDC, val);
-
-        if((curr & 0x80) && !(val & 0x80)) {
-            this->gameboy->mmu.writeIO(LY, 0);
-            this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~3) | LCD_HBLANK));
-        } else if(!(curr & 0x80) && (val & 0x80)) {
-            this->gameboy->mmu.writeIO(LY, 0);
-            this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~3) | LCD_ACCESS_OAM));
-
-            this->lastScanlineCycle = this->gameboy->cpu.getCycle() - (4 << this->halfSpeed);
-            this->gameboy->cpu.setEventCycle(this->lastScanlineCycle + modeCycles[LCD_ACCESS_OAM]);
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(STAT, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & 0x7) | (val & 0xF8)));
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(LY, [](u16 addr, u8 val) -> void {
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(LYC, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(LYC, val);
-        this->checkLYC();
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(DMA, [this](u16 addr, u8 val) -> void {
-        u16 src = val << 8;
-
-        for(u8 i = 0; i < 0xA0; i++) {
-            this->oam[i] = this->gameboy->mmu.read(src++);
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(BGP, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(BGP, val);
-
-        if(this->gameboy->gbMode != MODE_CGB) {
-            for(u8 i = 0; i < 4; i++) {
-                this->expandedBgp[i] = (u8) ((val >> (i * 2)) & 3);
-            }
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(OBP0, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(OBP0, val);
-
-        if(this->gameboy->gbMode != MODE_CGB) {
-            for(u8 i = 0; i < 4; i++) {
-                this->expandedObp[i] = (u8) ((val >> (i * 2)) & 3);
-            }
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(OBP1, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(OBP1, val);
-
-        if(this->gameboy->gbMode != MODE_CGB) {
-            for(u8 i = 0; i < 4; i++) {
-                this->expandedObp[4 + i] = (u8) ((val >> (i * 2)) & 3);
-            }
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(VBK, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            this->gameboy->mmu.writeIO(VBK, (u8) (val | 0xFE));
-            this->mapBanks();
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(BCPS, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            this->gameboy->mmu.writeIO(BCPS, (u8) (val | 0x40));
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(BCPD, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            u8 bcps = this->gameboy->mmu.readIO(BCPS);
-            u8 selected = (u8) (bcps & 0x3F);
-
-            u16 rgb555 = 0;
-            if(selected & 1) {
-                rgb555 = this->rawBgPalette[selected & ~1] | (val << 8);
-            } else {
-                rgb555 = val | (this->rawBgPalette[selected | 1] << 8);
-            }
-
-            this->rawBgPalette[selected] = val;
-            this->bgPalette[selected >> 1] = RGB555ToRGB8888(rgb555);
-
-            if(bcps & 0x80) {
-                this->gameboy->mmu.writeIO(BCPS, (u8) (((bcps & 0x3F) + 1) | (bcps & 0x80) | 0x40));
-            }
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(OCPS, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            this->gameboy->mmu.writeIO(OCPS, (u8) (val | 0x40));
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(OCPD, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            u8 ocps = this->gameboy->mmu.readIO(OCPS);
-            u8 selected = (u8) (ocps & 0x3F);
-
-            u16 rgb555 = 0;
-            if(selected & 1) {
-                rgb555 = this->rawSprPalette[selected & ~1] | (val << 8);
-            } else {
-                rgb555 = val | (this->rawSprPalette[selected | 1] << 8);
-            }
-
-            this->rawSprPalette[selected] = val;
-            this->sprPalette[selected >> 1] = RGB555ToRGB8888(rgb555);
-
-            if(ocps & 0x80) {
-                this->gameboy->mmu.writeIO(OCPS, (u8) (((ocps & 0x3F) + 1) | (ocps & 0x80) | 0x40));
-            }
-        }
-    });
-
-    this->gameboy->mmu.mapIOWriteFunc(HDMA5, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            if((this->gameboy->mmu.readIO(HDMA5) & 0x80) == 0) {
-                if((val & 0x80) == 0) {
-                    this->gameboy->mmu.writeIO(HDMA5, (u8) (val | 0x80));
-                }
-            } else {
-                if(((val >> 7) & 1) == 0) {
-                    u8 bank = (u8) (this->gameboy->gbMode == MODE_CGB && (this->gameboy->mmu.readIO(VBK) & 0x1) != 0);
-                    u16 src = (u16) ((this->gameboy->mmu.readIO(HDMA2) | (this->gameboy->mmu.readIO(HDMA1) << 8)) & 0xFFF0);
-                    u16 dst = (u16) ((this->gameboy->mmu.readIO(HDMA4) | (this->gameboy->mmu.readIO(HDMA3) << 8)) & 0x1FF0);
-                    u8 length = (u8) ((val & 0x7F) + 1);
-                    for(u8 i = 0; i < length; i++) {
-                        for(u8 j = 0; j < 0x10; j++) {
-                            this->vram[bank][dst++] = this->gameboy->mmu.read(src++);
-                        }
-
-                        dst &= 0x1FF0;
-                    }
-
-                    this->gameboy->mmu.writeIO(HDMA1, (u8) ((src >> 8) & 0xFF));
-                    this->gameboy->mmu.writeIO(HDMA2, (u8) (src & 0xFF));
-                    this->gameboy->mmu.writeIO(HDMA3, (u8) ((dst >> 8) & 0xFF));
-                    this->gameboy->mmu.writeIO(HDMA4, (u8) (dst & 0xFF));
-                    this->gameboy->mmu.writeIO(HDMA5, 0xFF);
-
-                    this->gameboy->cpu.advanceCycles((u64) ((length * 8) << this->halfSpeed));
-                } else {
-                    this->gameboy->mmu.writeIO(HDMA5, (u8) (val & 0x7F));
-                }
-            }
-        }
-    });
 }
 
 void PPU::mapBanks() {
@@ -437,6 +260,180 @@ void PPU::update() {
         }
 
         this->updateScanline();
+    }
+}
+
+void PPU::write(u16 addr, u8 val) {
+    switch(addr) {
+        case LCDC: {
+            u8 curr = this->gameboy->mmu.readIO(LCDC);
+            this->gameboy->mmu.writeIO(LCDC, val);
+
+            if((curr & 0x80) && !(val & 0x80)) {
+                this->gameboy->mmu.writeIO(LY, 0);
+                this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~3) | LCD_HBLANK));
+            } else if(!(curr & 0x80) && (val & 0x80)) {
+                this->gameboy->mmu.writeIO(LY, 0);
+                this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~3) | LCD_ACCESS_OAM));
+
+                this->lastScanlineCycle = this->gameboy->cpu.getCycle() - (4 << this->halfSpeed);
+                this->gameboy->cpu.setEventCycle(this->lastScanlineCycle + modeCycles[LCD_ACCESS_OAM]);
+            }
+
+            break;
+        }
+        case STAT:
+            this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & 0x7) | (val & 0xF8)));
+            break;
+        case LY:
+            break;
+        case LYC:
+            this->gameboy->mmu.writeIO(LYC, val);
+            this->checkLYC();
+            break;
+        case DMA: {
+            u16 src = val << 8;
+            for(u8 i = 0; i < 0xA0; i++) {
+                this->oam[i] = this->gameboy->mmu.read(src++);
+            }
+
+            break;
+        }
+        case BGP:
+            this->gameboy->mmu.writeIO(BGP, val);
+
+            if(this->gameboy->gbMode != MODE_CGB) {
+                for(u8 i = 0; i < 4; i++) {
+                    this->expandedBgp[i] = (u8) ((val >> (i * 2)) & 3);
+                }
+            }
+
+            break;
+        case OBP0:
+            this->gameboy->mmu.writeIO(OBP0, val);
+
+            if(this->gameboy->gbMode != MODE_CGB) {
+                for(u8 i = 0; i < 4; i++) {
+                    this->expandedObp[i] = (u8) ((val >> (i * 2)) & 3);
+                }
+            }
+
+            break;
+        case OBP1:
+            this->gameboy->mmu.writeIO(OBP1, val);
+
+            if(this->gameboy->gbMode != MODE_CGB) {
+                for(u8 i = 0; i < 4; i++) {
+                    this->expandedObp[4 + i] = (u8) ((val >> (i * 2)) & 3);
+                }
+            }
+
+            break;
+        case VBK:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                this->gameboy->mmu.writeIO(VBK, (u8) (val | 0xFE));
+                this->mapBanks();
+            }
+
+            break;
+        case BCPS:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                this->gameboy->mmu.writeIO(BCPS, (u8) (val | 0x40));
+                this->gameboy->mmu.writeIO(BCPD, this->rawBgPalette[val & 0x3F]);
+            }
+
+            break;
+        case BCPD:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                u8 bcps = this->gameboy->mmu.readIO(BCPS);
+                u8 selected = (u8) (bcps & 0x3F);
+
+                u16 rgb555 = 0;
+                if(selected & 1) {
+                    rgb555 = this->rawBgPalette[selected & ~1] | (val << 8);
+                } else {
+                    rgb555 = val | (this->rawBgPalette[selected | 1] << 8);
+                }
+
+                this->rawBgPalette[selected] = val;
+                this->bgPalette[selected >> 1] = RGB555ToRGB8888(rgb555);
+
+                if(bcps & 0x80) {
+                    u8 next = (bcps + 1) & 0x3F;
+
+                    this->gameboy->mmu.writeIO(BCPS, (u8) (next | (bcps & 0x80) | 0x40));
+                    this->gameboy->mmu.writeIO(BCPD, this->rawBgPalette[next]);
+                }
+            }
+
+            break;
+        case OCPS:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                this->gameboy->mmu.writeIO(OCPS, (u8) (val | 0x40));
+                this->gameboy->mmu.writeIO(OCPD, this->rawSprPalette[val & 0x3F]);
+            }
+
+            break;
+        case OCPD:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                u8 ocps = this->gameboy->mmu.readIO(OCPS);
+                u8 selected = (u8) (ocps & 0x3F);
+
+                u16 rgb555 = 0;
+                if(selected & 1) {
+                    rgb555 = this->rawSprPalette[selected & ~1] | (val << 8);
+                } else {
+                    rgb555 = val | (this->rawSprPalette[selected | 1] << 8);
+                }
+
+                this->rawSprPalette[selected] = val;
+                this->sprPalette[selected >> 1] = RGB555ToRGB8888(rgb555);
+
+                if(ocps & 0x80) {
+                    u8 next = (ocps + 1) & 0x3F;
+
+                    this->gameboy->mmu.writeIO(OCPS, (u8) (next | (ocps & 0x80) | 0x40));
+                    this->gameboy->mmu.writeIO(OCPD, this->rawSprPalette[next]);
+                }
+            }
+
+            break;
+        case HDMA5:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                if((this->gameboy->mmu.readIO(HDMA5) & 0x80) == 0) {
+                    if((val & 0x80) == 0) {
+                        this->gameboy->mmu.writeIO(HDMA5, (u8) (val | 0x80));
+                    }
+                } else {
+                    if(((val >> 7) & 1) == 0) {
+                        u8 bank = (u8) (this->gameboy->gbMode == MODE_CGB && (this->gameboy->mmu.readIO(VBK) & 0x1) != 0);
+                        u16 src = (u16) ((this->gameboy->mmu.readIO(HDMA2) | (this->gameboy->mmu.readIO(HDMA1) << 8)) & 0xFFF0);
+                        u16 dst = (u16) ((this->gameboy->mmu.readIO(HDMA4) | (this->gameboy->mmu.readIO(HDMA3) << 8)) & 0x1FF0);
+                        u8 length = (u8) ((val & 0x7F) + 1);
+                        for(u8 i = 0; i < length; i++) {
+                            for(u8 j = 0; j < 0x10; j++) {
+                                this->vram[bank][dst++] = this->gameboy->mmu.read(src++);
+                            }
+
+                            dst &= 0x1FF0;
+                        }
+
+                        this->gameboy->mmu.writeIO(HDMA1, (u8) ((src >> 8) & 0xFF));
+                        this->gameboy->mmu.writeIO(HDMA2, (u8) (src & 0xFF));
+                        this->gameboy->mmu.writeIO(HDMA3, (u8) ((dst >> 8) & 0xFF));
+                        this->gameboy->mmu.writeIO(HDMA4, (u8) (dst & 0xFF));
+                        this->gameboy->mmu.writeIO(HDMA5, 0xFF);
+
+                        this->gameboy->cpu.advanceCycles((u64) ((length * 8) << this->halfSpeed));
+                    } else {
+                        this->gameboy->mmu.writeIO(HDMA5, (u8) (val & 0x7F));
+                    }
+                }
+            }
+
+            break;
+        default:
+            break;
     }
 }
 

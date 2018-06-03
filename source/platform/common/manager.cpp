@@ -804,15 +804,17 @@ static void mgrPowerOn(const std::string& romFile) {
             romName = romFile;
         }
 
-        std::ifstream saveStream(romName + ".sav", std::ios::binary | std::ios::ate);
-        if(!saveStream.is_open()) {
-            mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
-        }
-
-        gameboy->cartridge = new Cartridge(romStream, romSize, saveStream);
+        gameboy->cartridge = new Cartridge(romStream, romSize);
 
         romStream.close();
-        saveStream.close();
+
+        std::ifstream saveStream(romName + ".sav", std::ios::binary);
+        if(saveStream.is_open()) {
+            gameboy->cartridge->load(saveStream);
+            saveStream.close();
+        } else {
+            mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
+        }
 
         cheatEngine->loadCheats(romName + ".cht");
 
@@ -849,8 +851,9 @@ void mgrPowerOff(bool save) {
 
             cheatEngine->saveCheats(romName + ".cht");
 
-            delete gameboy->cartridge;
+            Cartridge* cart = gameboy->cartridge;
             gameboy->cartridge = nullptr;
+            delete cart;
         }
 
         gameboy->powerOff();

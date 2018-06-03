@@ -17,6 +17,9 @@ Printer::Printer(Gameboy* gb) {
 }
 
 void Printer::reset() {
+    // Alleyway breaks when the printer is enabled, so force disable it.
+    this->forceDisable = this->gameboy->cartridge != nullptr && this->gameboy->cartridge->getRomTitle() == "ALLEY WAY";
+
     memset(this->gfx, 0, sizeof(this->gfx));
     this->gfxIndex = 0;
 
@@ -75,6 +78,10 @@ void Printer::update() {
 }
 
 u8 Printer::link(u8 val) {
+    if(this->forceDisable) {
+        return 0xFF;
+    }
+
     // "Byte" 6 is actually a number of bytes. The counter stays at 6 until the
     // required number of bytes have been read.
     if(this->packetByte == 6 && this->cmdLength == 0) {
@@ -202,6 +209,8 @@ u8 Printer::link(u8 val) {
 }
 
 std::istream& operator>>(std::istream& is, Printer& printer) {
+    is.read((char*) &printer.forceDisable, sizeof(printer.forceDisable));
+
     is.read((char*) printer.gfx, sizeof(printer.gfx));
     is.read((char*) &printer.gfxIndex, sizeof(printer.gfxIndex));
     is.read((char*) &printer.packetByte, sizeof(printer.packetByte));
@@ -224,6 +233,8 @@ std::istream& operator>>(std::istream& is, Printer& printer) {
 }
 
 std::ostream& operator<<(std::ostream& os, const Printer& printer) {
+    os.write((char*) &printer.forceDisable, sizeof(printer.forceDisable));
+
     os.write((char*) printer.gfx, sizeof(printer.gfx));
     os.write((char*) &printer.gfxIndex, sizeof(printer.gfxIndex));
     os.write((char*) &printer.packetByte, sizeof(printer.packetByte));

@@ -11,6 +11,10 @@ public:
     void reset();
     void update();
 
+    void write(u16 addr, u8 val);
+
+    void setController(u8 controller, u8 val);
+
     friend std::istream& operator>>(std::istream& is, SGB& sgb);
     friend std::ostream& operator<<(std::ostream& os, const SGB& sgb);
 
@@ -20,10 +24,6 @@ public:
 
     u8* getPaletteMap() {
         return this->paletteMap;
-    }
-
-    inline void setController(u8 controller, u8 val) {
-        this->controllers[controller] = val;
     }
 private:
     void refreshBg();
@@ -71,8 +71,8 @@ private:
     u8 packetsTransferred; // Number of packets which have been transferred so far
     u8 packetBit; // Next bit # to be sent in the packet. 0xFF if no packet is being transferred.
     u8 packet[16];
-    u8 command;
 
+    u8 command;
     // Data for various different SGB commands
     struct SgbCmdData {
         u8 numDataSets;

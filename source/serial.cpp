@@ -17,28 +17,12 @@ void Serial::reset() {
     this->nextSerialExternalCycle = 0;
 
     this->printer.reset();
-
-    this->gameboy->mmu.mapIOWriteFunc(SC, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(SC, val);
-
-        if((val & 0x81) == 0x81) { // Internal clock
-            if(this->nextSerialInternalCycle == 0) {
-                if(this->gameboy->gbMode == MODE_CGB && (val & 0x02)) {
-                    this->nextSerialInternalCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_SECOND / (1024 * 32);
-                } else {
-                    this->nextSerialInternalCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_SECOND / 1024;
-                }
-
-                this->gameboy->cpu.setEventCycle(this->nextSerialInternalCycle);
-            }
-        } else {
-            this->nextSerialInternalCycle = 0;
-        }
-    });
 }
 
 void Serial::update() {
-    if(this->gameboy->settings.getOption(GB_OPT_PRINTER_ENABLED)) {
+    bool printerEnabled = this->gameboy->settings.getOption(GB_OPT_PRINTER_ENABLED);
+
+    if(printerEnabled) {
         this->printer.update();
     }
 
@@ -73,7 +57,7 @@ void Serial::update() {
             u8 sb = this->gameboy->mmu.readIO(SB);
 
             u8 received = 0xFF;
-            if(this->gameboy->settings.getOption(GB_OPT_PRINTER_ENABLED) && (this->gameboy->cartridge == nullptr || this->gameboy->cartridge->getRomTitle().compare("ALLEY WAY") != 0)) { // Alleyway breaks when the printer is enabled, so force disable it.
+            if(printerEnabled) {
                 received = this->printer.link(sb);
             } else {
                 // TODO: Send/Receive
@@ -87,6 +71,26 @@ void Serial::update() {
             this->nextSerialInternalCycle = 0;
         } else {
             this->gameboy->cpu.setEventCycle(this->nextSerialInternalCycle);
+        }
+    }
+}
+
+void Serial::write(u16 addr, u8 val) {
+    if(addr == SC) {
+        this->gameboy->mmu.writeIO(SC, val);
+
+        if((val & 0x81) == 0x81) { // Internal clock
+            if(this->nextSerialInternalCycle == 0) {
+                if(this->gameboy->gbMode == MODE_CGB && (val & 0x02)) {
+                    this->nextSerialInternalCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_SECOND / (1024 * 32);
+                } else {
+                    this->nextSerialInternalCycle = this->gameboy->cpu.getCycle() + CYCLES_PER_SECOND / 1024;
+                }
+
+                this->gameboy->cpu.setEventCycle(this->nextSerialInternalCycle);
+            }
+        } else {
+            this->nextSerialInternalCycle = 0;
         }
     }
 }

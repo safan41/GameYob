@@ -12,31 +12,6 @@
 #include "sgb.h"
 #include "timer.h"
 
-static u8 temp1 = 0;
-static u8 temp2 = 0;
-
-#define FLAG_ZERO 0x80
-#define FLAG_NEGATIVE 0x40
-#define FLAG_HALFCARRY 0x20
-#define FLAG_CARRY 0x10
-
-#define FLAG_GET(f) ((this->registers.r8[R8_F] & (f)) == (f))
-#define FLAG_SET(f, x) (this->registers.r8[R8_F] ^= (-(x) ^ this->registers.r8[R8_F]) & (f))
-
-#define SETPC(val) (this->registers.r16[R16_PC] = (val), this->advanceCycles(4))
-
-#define MEMREAD(addr) (temp1 = this->gameboy->mmu.read(addr), this->advanceCycles(4), temp1)
-#define MEMWRITE(addr, val) (this->gameboy->mmu.write(addr, val), this->advanceCycles(4))
-
-#define READPC8() MEMREAD(this->registers.r16[R16_PC]++)
-#define READPC16() (temp2 = READPC8(), temp2 | (READPC8() << 8))
-
-#define PUSH(val) (MEMWRITE(--this->registers.r16[R16_SP], ((val) >> 8)), MEMWRITE(--this->registers.r16[R16_SP], ((val) & 0xFF)))
-#define POP() (temp2 = MEMREAD(this->registers.r16[R16_SP]++), temp2 | (MEMREAD(this->registers.r16[R16_SP]++) << 8))
-
-#define ADD16(r, n) (this->advanceCycles(4), (r) + (n))
-#define SUB16(r, n) (this->advanceCycles(4), (r) - (n))
-
 enum {
     R8_F = 0,
     R8_A,
@@ -47,9 +22,7 @@ enum {
     R8_L,
     R8_H,
     R8_SP_P,
-    R8_SP_S,
-    R8_PC_C,
-    R8_PC_P
+    R8_SP_S
 };
 
 enum {
@@ -77,16 +50,22 @@ void CPU::reset() {
     if(this->gameboy->gbMode == MODE_CGB && this->gameboy->settings.getOption(GB_OPT_GBA_MODE)) {
         this->registers.r8[R8_B] = 1;
     }
+}
 
-    this->gameboy->mmu.mapIOWriteFunc(IF, [this](u16 addr, u8 val) -> void {
-        this->gameboy->mmu.writeIO(IF, (u8) (val | 0xE0));
-    });
+void CPU::write(u16 addr, u8 val) {
+    switch(addr) {
+        case IF:
+            this->gameboy->mmu.writeIO(IF, (u8) (val | 0xE0));
+            break;
+        case KEY1:
+            if(this->gameboy->gbMode == MODE_CGB) {
+                this->gameboy->mmu.writeIO(KEY1, (u8) ((this->gameboy->mmu.readIO(KEY1) & ~1) | (val & 1)));
+            }
 
-    this->gameboy->mmu.mapIOWriteFunc(KEY1, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            this->gameboy->mmu.writeIO(KEY1, (u8) ((this->gameboy->mmu.readIO(KEY1) & ~1) | (val & 1)));
-        }
-    });
+            break;
+        default:
+            break;
+    }
 }
 
 std::istream& operator>>(std::istream& is, CPU& cpu) {
@@ -112,6 +91,55 @@ std::ostream& operator<<(std::ostream& os, const CPU& cpu) {
 
     return os;
 }
+
+void CPU::updateEvents() {
+    if(this->imeCycle != 0) {
+        if(this->imeCycle >= this->cycleCount) {
+            this->imeCycle = 0;
+            this->ime = true;
+        } else {
+            this->setEventCycle(this->imeCycle);
+        }
+    }
+
+    if(this->gameboy->cartridge != nullptr) {
+        mbcUpdate update = this->gameboy->cartridge->getUpdateFunc();
+        if(update != nullptr) {
+            (this->gameboy->cartridge->*update)();
+        }
+    }
+
+    this->gameboy->ppu.update();
+    this->gameboy->apu.update();
+    this->gameboy->sgb.update();
+    this->gameboy->timer.update();
+    this->gameboy->serial.update();
+}
+
+static u8 temp1 = 0;
+static u8 temp2 = 0;
+
+#define FLAG_ZERO 0x80
+#define FLAG_NEGATIVE 0x40
+#define FLAG_HALFCARRY 0x20
+#define FLAG_CARRY 0x10
+
+#define FLAG_GET(f) ((this->registers.r8[R8_F] & (f)) == (f))
+#define FLAG_SET(f, x) (this->registers.r8[R8_F] ^= (-(x) ^ this->registers.r8[R8_F]) & (f))
+
+#define SETPC(val) (this->registers.r16[R16_PC] = (val), this->advanceCycles(4))
+
+#define MEMREAD(addr) (temp1 = this->gameboy->mmu.read(addr), this->advanceCycles(4), temp1)
+#define MEMWRITE(addr, val) (this->gameboy->mmu.write(addr, val), this->advanceCycles(4))
+
+#define READPC8() MEMREAD(this->registers.r16[R16_PC]++)
+#define READPC16() (temp2 = READPC8(), temp2 | (READPC8() << 8))
+
+#define PUSH(val) (MEMWRITE(--this->registers.r16[R16_SP], ((val) >> 8)), MEMWRITE(--this->registers.r16[R16_SP], ((val) & 0xFF)))
+#define POP() (temp2 = MEMREAD(this->registers.r16[R16_SP]++), temp2 | (MEMREAD(this->registers.r16[R16_SP]++) << 8))
+
+#define ADD16(r, n) (this->advanceCycles(4), (r) + (n))
+#define SUB16(r, n) (this->advanceCycles(4), (r) - (n))
 
 static const u8 r[8] = {
         R8_B,
@@ -169,7 +197,7 @@ inline void CPU::alu(u8 func, u8 val) {
             case 1: { // ADC
                 low = (u16) FLAG_GET(FLAG_CARRY);
             }
-            case 0: { // ADD A
+            case 0: { // ADD
                 low += (a & 0xF) + (val & 0xF);
                 high = (a >> 4) + (val >> 4);
                 break;
@@ -791,25 +819,4 @@ void CPU::run() {
             this->gameboy->mmu.writeIO(IF, (u8) (this->gameboy->mmu.readIO(IF) & ~(1 << irqNo)));
         }
     }
-}
-
-void CPU::updateEvents() {
-    if(this->imeCycle != 0) {
-        if(this->imeCycle >= this->cycleCount) {
-            this->imeCycle = 0;
-            this->ime = true;
-        } else {
-            this->setEventCycle(this->imeCycle);
-        }
-    }
-
-    if(this->gameboy->cartridge != nullptr) {
-        this->gameboy->cartridge->update();
-    }
-
-    this->gameboy->ppu.update();
-    this->gameboy->apu.update();
-    this->gameboy->sgb.update();
-    this->gameboy->timer.update();
-    this->gameboy->serial.update();
 }

@@ -103,22 +103,6 @@ public:
         this->banks[bank & 0xF] = block;
     }
 
-    inline void mapBankReadFunc(u8 bank, std::function<u8(u16 addr)> readFunc) {
-        this->bankReadFuncs[bank & 0xF] = readFunc;
-    }
-
-    inline void mapBankWriteFunc(u8 bank, std::function<void(u16 addr, u8 val)> writeFunc) {
-        this->bankWriteFuncs[bank & 0xF] = writeFunc;
-    }
-
-    inline void mapIOReadFunc(u16 addr, std::function<u8(u16 addr)> readFunc) {
-        this->ioReadFuncs[addr & 0xFF] = readFunc;
-    }
-
-    inline void mapIOWriteFunc(u16 addr, std::function<void(u16 addr, u8 val)> writeFunc) {
-        this->ioWriteFuncs[addr & 0xFF] = writeFunc;
-    }
-
     inline u8 readIO(u16 addr) {
         return this->hram[addr & 0xFF];
     }
@@ -136,11 +120,6 @@ private:
     Gameboy* gameboy;
 
     u8* banks[0x10];
-    std::function<u8(u16 addr)> bankReadFuncs[0x10];
-    std::function<void(u16 addr, u8 val)> bankWriteFuncs[0x10];
-
-    std::function<u8(u16 addr)> ioReadFuncs[0x100];
-    std::function<void(u16 addr, u8 val)> ioWriteFuncs[0x100];
 
     u8 wram[8][0x1000];
     u8 hram[0x100];

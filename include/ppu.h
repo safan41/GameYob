@@ -19,6 +19,8 @@ public:
     void reset();
     void update();
 
+    void write(u16 addr, u8 val);
+
     void setHalfSpeed(bool halfSpeed);
 
     void transferTiles(u8* dest);

@@ -1,6 +1,7 @@
 #include <cstring>
 #include <istream>
 #include <ostream>
+#include <gameboy.h>
 
 #include "apu.h"
 #include "cartridge.h"
@@ -88,11 +89,6 @@ MMU::MMU(Gameboy* gameboy) {
 
 void MMU::reset() {
     memset(this->banks, 0, sizeof(this->banks));
-    memset(this->bankReadFuncs, 0, sizeof(this->bankReadFuncs));
-    memset(this->bankWriteFuncs, 0, sizeof(this->bankWriteFuncs));
-
-    memset(this->ioReadFuncs, 0, sizeof(this->ioReadFuncs));
-    memset(this->ioWriteFuncs, 0, sizeof(this->ioWriteFuncs));
 
     for(int i = 0; i < 8; i++) {
         memset(this->wram[i], 0, sizeof(this->wram[i]));
@@ -104,63 +100,162 @@ void MMU::reset() {
     this->useRealBios = this->gameboy->settings.getOption(GB_OPT_BIOS_ENABLED);
 
     this->mapBanks();
-
-    this->mapIOReadFunc(RP, [this](u16 addr) -> u8 {
-        u8 rp = this->readIO(RP);
-        if(this->gameboy->gbMode == MODE_CGB) {
-            // TODO: IR communication.
-            return rp | 2;
-        } else {
-            return rp;
-        }
-    });
-
-    this->mapIOWriteFunc(BIOS, [this](u16 addr, u8 val) -> void {
-        if(this->biosMapped) {
-            this->biosMapped = false;
-            this->mapBanks();
-        }
-    });
-
-    this->mapIOWriteFunc(RP, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            // TODO: IR communication.
-            this->writeIO(RP, (u8) ((val & ~0x2) | 0x3C));
-        }
-    });
-
-    this->mapIOWriteFunc(SVBK, [this](u16 addr, u8 val) -> void {
-        if(this->gameboy->gbMode == MODE_CGB) {
-            this->writeIO(SVBK, (u8) (val | 0xF8));
-            this->mapBanks();
-        }
-    });
 }
 
 u8 MMU::read(u16 addr) {
     u8 area = (u8) (addr >> 12);
-    if(this->bankReadFuncs[area] != nullptr) {
-        return this->bankReadFuncs[area](addr);
-    } else if(this->banks[area] != nullptr) {
-        return this->banks[area][addr & 0xFFF];
-    } else {
-        if(this->gameboy->settings.printDebug != nullptr) {
-            this->gameboy->settings.printDebug("Attempted to read from unmapped memory bank: 0x%x\n", area);
-        }
+    switch(area) {
+        case 0xA:
+        case 0xB:
+            if(this->gameboy->cartridge != nullptr) {
+                mbcRead read = this->gameboy->cartridge->getReadFunc();
+                if(read != nullptr) {
+                    return (this->gameboy->cartridge->*read)(addr);
+                }
+            }
+        case 0xF:
+            if(addr >= 0xFE00) {
+                if(addr < 0xFEA0) {
+                    return this->gameboy->ppu.readOam(addr);
+                } else if(addr >= 0xFF00) {
+                    if(addr == DIV || addr == TIMA || addr == TMA || addr == TAC) {
+                        return this->gameboy->timer.read(addr);
+                    } else if((addr >= NR10 && addr <= WAVEF) || addr == PCM12 || addr == PCM34) {
+                        return this->gameboy->apu.read(addr);
+                    } else {
+                        return this->hram[addr & 0xFF];
+                    }
+                }
 
-        return 0xFF;
+                return 0;
+            }
+        case 0x0:
+            if(this->biosMapped && ((addr >= 0x000 && addr < 0x100) || (addr >= 0x200 && addr < 0x900))) {
+                return (this->useRealBios ? bios_bin : dummy_bios_bin)[addr & 0xFFF];
+            }
+        default: {
+            u8* bank = this->banks[area];
+            if(bank != nullptr) {
+                return bank[addr & 0xFFF];
+            } else {
+                if(this->gameboy->settings.printDebug != nullptr) {
+                    this->gameboy->settings.printDebug("Attempted to read from unmapped memory bank: 0x%x\n", area);
+                }
+
+                return 0xFF;
+            }
+        }
     }
 }
 
 void MMU::write(u16 addr, u8 val) {
     u8 area = (u8) (addr >> 12);
-    if(this->bankWriteFuncs[area] != nullptr) {
-        this->bankWriteFuncs[area](addr, val);
-    } else if(this->banks[area] != nullptr) {
-        this->banks[area][addr & 0xFFF] = val;
-    } else {
-        if(this->gameboy->settings.printDebug != nullptr) {
-            this->gameboy->settings.printDebug("Attempted to write to unmapped memory bank: 0x%x\n", area);
+    switch(area) {
+        case 0x0:
+        case 0x1:
+        case 0x2:
+        case 0x3:
+        case 0x4:
+        case 0x5:
+        case 0x6:
+        case 0x7:
+            if(this->gameboy->cartridge != nullptr) {
+                mbcWrite write = this->gameboy->cartridge->getWriteFunc();
+                if(write != nullptr) {
+                    (this->gameboy->cartridge->*write)(addr, val);
+                }
+            }
+
+            break;
+        case 0xA:
+        case 0xB:
+            if(this->gameboy->cartridge != nullptr) {
+                mbcWrite writeSram = this->gameboy->cartridge->getWriteSramFunc();
+                if(writeSram != nullptr) {
+                    (this->gameboy->cartridge->*writeSram)(addr, val);
+                    break;
+                }
+            }
+        case 0xF:
+            if(addr >= 0xFE00) {
+                if(addr < 0xFEA0) {
+                    this->gameboy->ppu.writeOam(addr, val);
+                } else if((addr >= NR10 && addr <= WAVEF) || addr == PCM12 || addr == PCM34) {
+                    this->gameboy->apu.write(addr, val);
+                } else if(addr >= 0xFF00) {
+                    switch(addr) {
+                        case BIOS:
+                            if(this->biosMapped) {
+                                this->biosMapped = false;
+                                this->mapBanks();
+                            }
+
+                            break;
+                        case RP:
+                            if(this->gameboy->gbMode == MODE_CGB) {
+                                // TODO: IR communication.
+                                this->writeIO(RP, (u8) ((val & ~0x2) | 0x3C | 0x2));
+                            }
+
+                            break;
+                        case SVBK:
+                            if(this->gameboy->gbMode == MODE_CGB) {
+                                this->writeIO(SVBK, (u8) (val | 0xF8));
+                                this->mapBanks();
+                            }
+
+                            break;
+                        case IF:
+                        case KEY1:
+                            this->gameboy->cpu.write(addr, val);
+                            break;
+                        case LCDC:
+                        case STAT:
+                        case LY:
+                        case LYC:
+                        case DMA:
+                        case BGP:
+                        case OBP0:
+                        case OBP1:
+                        case VBK:
+                        case BCPS:
+                        case BCPD:
+                        case OCPS:
+                        case OCPD:
+                        case HDMA5:
+                            this->gameboy->ppu.write(addr, val);
+                            break;
+                        case SC:
+                            this->gameboy->serial.write(addr, val);
+                            break;
+                        case JOYP:
+                            this->gameboy->sgb.write(addr, val);
+                            break;
+                        case DIV:
+                        case TIMA:
+                        case TMA:
+                        case TAC:
+                            this->gameboy->timer.write(addr, val);
+                            break;
+                        default:
+                            this->hram[addr & 0xFF] = val;
+                            break;
+                    }
+                }
+
+                return;
+            }
+        default: {
+            u8* bank = this->banks[area];
+            if(bank != nullptr) {
+                bank[addr & 0xFFF] = val;
+            } else {
+                if(this->gameboy->settings.printDebug != nullptr) {
+                    this->gameboy->settings.printDebug("Attempted to write to unmapped memory bank: 0x%x\n", area);
+                }
+            }
+
+            break;
         }
     }
 }
@@ -188,55 +283,11 @@ std::ostream& operator<<(std::ostream& os, const MMU& mmu) {
 void MMU::mapBanks() {
     u8 wramBank = (u8) (this->readIO(SVBK) & 0x7);
 
-    this->mapBankBlock(0xC, this->wram[0]);
-    this->mapBankBlock(0xD, this->wram[wramBank != 0 ? wramBank : 1]);
-    this->mapBankBlock(0xE, this->wram[0]);
+    u8* wram0 = this->wram[0];
+    u8* wram1 = this->wram[wramBank != 0 ? wramBank : 1];
 
-    if(this->biosMapped) {
-        this->mapBankReadFunc(0x0, [this](u16 addr) -> u8 {
-            if(addr < 0x100 || (addr >= 0x200 && addr <= 0x8FF)) {
-                return (this->useRealBios ? bios_bin : dummy_bios_bin)[addr & 0xFFF];
-            } else if(this->banks[0x0] != nullptr) {
-                return this->banks[0x0][addr & 0xFFF];
-            }
-
-            return 0xFF;
-        });
-    } else {
-        this->mapBankReadFunc(0x0, nullptr);
-    }
-
-    this->mapBankReadFunc(0xF, [this](u16 addr) -> u8 {
-        if(addr >= 0xFF00) {
-            u8 reg = (u8) (addr & 0xFF);
-            if(this->ioReadFuncs[reg] != nullptr) {
-                return this->ioReadFuncs[reg](addr);
-            } else {
-                return this->hram[reg];
-            }
-        } else if(addr >= 0xFE00 && addr < 0xFEA0) {
-            return this->gameboy->ppu.readOam(addr);
-        } else if(addr < 0xFE00) {
-            u8 currWramBank = (u8) (this->readIO(SVBK) & 0x7);
-            return this->wram[currWramBank != 0 ? currWramBank : 1][addr & 0xFFF];
-        }
-
-        return 0;
-    });
-
-    this->mapBankWriteFunc(0xF, [this](u16 addr, u8 val) -> void {
-        if(addr >= 0xFF00) {
-            u8 reg = (u8) (addr & 0xFF);
-            if(this->ioWriteFuncs[reg] != nullptr) {
-                this->ioWriteFuncs[reg](addr, val);
-            } else {
-                this->hram[reg] = val;
-            }
-        } else if(addr >= 0xFE00 && addr < 0xFEA0) {
-            this->gameboy->ppu.writeOam(addr, val);
-        } else if(addr < 0xFE00) {
-            u8 currWramBank = (u8) (this->readIO(SVBK) & 0x7);
-            this->wram[currWramBank != 0 ? currWramBank : 1][addr & 0xFFF] = val;
-        }
-    });
+    this->mapBankBlock(0xC, wram0);
+    this->mapBankBlock(0xD, wram1);
+    this->mapBankBlock(0xE, wram0);
+    this->mapBankBlock(0xF, wram1);
 }

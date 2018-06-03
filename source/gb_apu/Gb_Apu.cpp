@@ -363,10 +363,10 @@ int Gb_Apu::read_register( s32 time, unsigned addr )
 	run_until( time );
 
 	if(addr == pcm12)
-		return gameboy->gbMode != MODE_GB ? ((square1.last_amp >> 4) & 0xF) | (square2.last_amp & 0xF0) : 0xFF;
+		return gameboy->gbMode != MODE_GB ? ((square1.last_amp >> 4) & 0x0F) | (square2.last_amp & 0xF0) : 0xFF;
 
 	if(addr == pcm34)
-		return gameboy->gbMode != MODE_GB ? ((wave.last_amp >> 4) & 0xF) | (noise.last_amp & 0xF0) : 0xFF;
+		return gameboy->gbMode != MODE_GB ? ((wave.last_amp >> 4) & 0x0F) | (noise.last_amp & 0xF0) : 0xFF;
 
 	int reg = addr - start_addr;
 	assert( (unsigned) reg < register_count );
