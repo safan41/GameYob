@@ -42,6 +42,5 @@ void uiPrint(const char* str, ...);
 void uiPrintv(const char* str, va_list list);
 
 void uiFlush();
-void uiSync();
 
 UIKey uiReadKey();

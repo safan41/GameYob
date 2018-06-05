@@ -122,10 +122,6 @@ void uiFlush() {
     gfxSwapBuffers();
 }
 
-void uiSync() {
-    gfxWaitForVsync();
-}
-
 void uiPushInput(UIKey key) {
     keyQueue.push(key);
 }

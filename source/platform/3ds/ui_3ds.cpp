@@ -176,10 +176,6 @@ void uiFlush() {
     gfxFlushBuffers();
 }
 
-void uiSync() {
-    gspWaitForVBlank();
-}
-
 void uiPushInput(UIKey key) {
     keyQueue.push(key);
 }

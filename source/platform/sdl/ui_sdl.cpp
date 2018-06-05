@@ -115,9 +115,6 @@ void uiFlush() {
     wrefresh(window);
 }
 
-void uiSync() {
-}
-
 UIKey uiReadKey() {
     switch(wgetch(window)) {
         case '\n':
