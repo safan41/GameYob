@@ -100,6 +100,18 @@ void uiSetTextColor(TextColor color) {
     uiUpdateAttr();
 }
 
+void uiAdvanceCursor(u32 n) {
+    int y = 0;
+    int x = 0;
+    getyx(window, y, x);
+
+    wmove(window, y, x + n);
+}
+
+void uiSetLine(u32 n) {
+    wmove(window, n, 0);
+}
+
 void uiPrint(const char* str, ...) {
     va_list list;
     va_start(list, str);

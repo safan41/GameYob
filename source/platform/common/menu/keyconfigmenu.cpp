@@ -159,10 +159,12 @@ void KeyConfigMenu::draw(u32 width, u32 height) {
         uiPrint("* %s *\n\n", config->name.c_str());
         uiSetTextColor(TEXT_COLOR_NONE);
     } else {
-        uiPrint("  %s  \n\n", config->name.c_str());
+        uiAdvanceCursor(2);
+        uiPrint("%s\n\n", config->name.c_str());
     }
 
-    uiPrint("              Button   Function\n\n");
+    uiAdvanceCursor(14);
+    uiPrint("Button   Function\n\n");
 
     u32 keyCount = inputGetKeyCount();
     for(u32 i = 0, elements = 0; i < keyCount && elements < scrollY + height - 7; i++) {
@@ -175,20 +177,20 @@ void KeyConfigMenu::draw(u32 width, u32 height) {
             continue;
         }
 
-        const std::string keyName = inputGetKeyName(i);
-
-        int spaces = 18 - keyName.length();
-        while(spaces > 0) {
-            uiPrint(" ");
-            spaces--;
+        std::string keyName = inputGetKeyName(i);
+        if(keyName.length() > 18) {
+            keyName = keyName.substr(0, 18);
         }
+
+        uiAdvanceCursor(18 - keyName.length());
 
         if(option == (int) i) {
             uiSetLineHighlighted(true);
             uiPrint("* %s | %s *\n", keyName.c_str(), configGetFuncKeyName(config->funcKeys[i]).c_str());
             uiSetLineHighlighted(false);
         } else {
-            uiPrint("  %s | %s  \n", keyName.c_str(), configGetFuncKeyName(config->funcKeys[i]).c_str());
+            uiAdvanceCursor(2);
+            uiPrint("%s | %s\n", keyName.c_str(), configGetFuncKeyName(config->funcKeys[i]).c_str());
         }
 
         elements++;

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <platform/common/menu/filechooser.h>
 
 #include "platform/common/menu/filechooser.h"
 #include "platform/input.h"
@@ -127,15 +128,16 @@ bool FileChooser::processInput(UIKey key, u32 width, u32 height) {
 }
 
 void FileChooser::draw(u32 width, u32 height) {
-    std::string currDirName = directory;
+    std::string currDirName;
     if(currDirName.length() > width) {
-        currDirName = currDirName.substr(0, width);
+        currDirName = directory.substr(0, width);
+    } else {
+        currDirName = directory;
     }
 
     uiPrint("%s", currDirName.c_str());
-
-    for(u32 j = 0; j < width - currDirName.length(); j++) {
-        uiPrint(" ");
+    if(currDirName.length() < width) {
+        uiPrint("\n");
     }
 
     for(u32 i = scrollY; i < scrollY + filesPerPage && i < files.size(); i++) {
@@ -152,35 +154,34 @@ void FileChooser::draw(u32 width, u32 height) {
             uiPrint("  ");
         }
 
-        u32 displayLen = width > 2 ? width - 2 : 0;
-        if(entry.flags & FLAG_DIRECTORY) {
-            displayLen--;
-        }
-
-        std::string fileName;
-        if(entry.name.length() > (u32) displayLen) {
-            fileName = entry.name.substr(0, (std::string::size_type) displayLen);
-        } else {
-            fileName = entry.name;
-        }
-
         if(entry.flags & FLAG_DIRECTORY) {
             uiSetTextColor(TEXT_COLOR_YELLOW);
         } else if(entry.flags & FLAG_SUSPENDED) {
             uiSetTextColor(TEXT_COLOR_PURPLE);
         }
 
-        uiPrint("%s", fileName.c_str());
+        std::string fileName = entry.name;
         if(entry.flags & FLAG_DIRECTORY) {
-            uiPrint("/");
+            fileName += "/";
         }
 
-        for(u32 j = 0; j < displayLen - fileName.length(); j++) {
-            uiPrint(" ");
+        u32 fileMax = width - 2;
+        if(fileName.length() > fileMax) {
+            fileName = fileName.substr(0, fileMax);
         }
 
-        uiSetTextColor(TEXT_COLOR_NONE);
-        uiSetLineHighlighted(false);
+        uiPrint("%s", fileName.c_str());
+        if(fileName.length() < fileMax) {
+            uiPrint("\n");
+        }
+
+        if(entry.flags & (FLAG_DIRECTORY | FLAG_SUSPENDED)) {
+            uiSetTextColor(TEXT_COLOR_NONE);
+        }
+
+        if(i == selection) {
+            uiSetLineHighlighted(false);
+        }
     }
 }
 

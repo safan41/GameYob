@@ -120,61 +120,42 @@ bool MainMenu::processInput(UIKey key, u32 width, u32 height) {
 }
 
 void MainMenu::draw(u32 width, u32 height) {
-    int pos = 0;
-    const std::string menuName = getSubMenuName(currMenu);
-    int nameStart = (width - menuName.length() - 2) / 2;
-    if(currOption == -1) {
-        nameStart -= 2;
+    std::string menuName = getSubMenuName(currMenu);
 
+    u32 menuMax = width - 8;
+    if(menuName.length() > menuMax) {
+        menuName = menuName.substr(0, menuMax);
+    }
+
+    u32 menuPad = (menuMax - menuName.length()) / 2;
+
+    if(currOption == -1) {
         uiSetTextColor(TEXT_COLOR_GREEN);
         uiPrint("<");
-        uiSetTextColor(TEXT_COLOR_NONE);
+        uiSetTextColor(TEXT_COLOR_YELLOW);
     } else {
         uiPrint("<");
     }
 
-    pos++;
-    for(; pos < nameStart; pos++) {
-        uiPrint(" ");
-    }
+    uiAdvanceCursor(menuPad);
 
     if(currOption == -1) {
-        uiSetTextColor(TEXT_COLOR_YELLOW);
-        uiPrint("* ");
-        uiSetTextColor(TEXT_COLOR_NONE);
-
-        pos += 2;
+        uiPrint("* [%s] *", menuName.c_str());
+    } else {
+        uiAdvanceCursor(2);
+        uiPrint("[%s]", menuName.c_str());
+        uiAdvanceCursor(2);
     }
 
-    if(currOption == -1) {
-        uiSetTextColor(TEXT_COLOR_YELLOW);
-    }
-
-    uiPrint("[%s]", menuName.c_str());
-    uiSetTextColor(TEXT_COLOR_NONE);
-
-    pos += 2 + menuName.length();
-    if(currOption == -1) {
-        uiSetTextColor(TEXT_COLOR_YELLOW);
-        uiPrint(" *");
-        uiSetTextColor(TEXT_COLOR_NONE);
-
-        pos += 2;
-    }
-
-    for(; pos < (int) width - 1; pos++) {
-        uiPrint(" ");
-    }
+    uiAdvanceCursor(menuPad);
 
     if(currOption == -1) {
         uiSetTextColor(TEXT_COLOR_GREEN);
-        uiPrint(">");
+        uiPrint(">\n\n");
         uiSetTextColor(TEXT_COLOR_NONE);
     } else {
-        uiPrint(">");
+        uiPrint(">\n\n");
     }
-
-    uiPrint("\n");
 
     // Rest of the lines: options
     u8 numOptions = getSubMenuItemCount(currMenu);
@@ -188,31 +169,34 @@ void MainMenu::draw(u32 width, u32 height) {
         }
 
         MenuItemType type = getItemType(currMenu, i);
-        const std::string name = getItemName(currMenu, i);
+        std::string name = getItemName(currMenu, i);
+
+        u32 entryMax = width - 4;
+        if(name.length() > entryMax) {
+            name = name.substr(0, entryMax);
+        }
 
         if(type != MENU_ITEM_MULTI_CHOICE) {
-            for(unsigned int j = 0; j < (width - name.length()) / 2 - 2; j++) {
-                uiPrint(" ");
-            }
+            uiAdvanceCursor((entryMax - name.length()) / 2);
 
             if(i == currOption) {
-                uiPrint("* %s *\n", name.c_str());
+                uiPrint("* %s *\n\n", name.c_str());
             } else {
-                uiPrint("  %s  \n", name.c_str());
+                uiAdvanceCursor(2);
+                uiPrint("%s\n\n", name.c_str());
             }
-
-            uiPrint("\n");
         } else {
-            int spaces = width / 2 - name.length();
-            for(int j = 0; j < spaces; j++) {
-                uiPrint(" ");
+            std::string value = getItemValue(currMenu, i);
+
+            u32 entryValueMax = entryMax - name.length() - 2;
+            if(value.length() > entryValueMax) {
+                value = value.substr(0, entryValueMax);
             }
 
-            const std::string value = getItemValue(currMenu, i);
+            uiAdvanceCursor((entryValueMax - value.length()) / 2);
 
             if(i == currOption) {
-                uiPrint("* ");
-                uiPrint("%s  ", name.c_str());
+                uiPrint("* %s  ", name.c_str());
 
                 if(enabled) {
                     uiSetTextColor(TEXT_COLOR_GREEN);
@@ -226,59 +210,40 @@ void MainMenu::draw(u32 width, u32 height) {
                     uiSetTextColor(TEXT_COLOR_YELLOW);
                 }
 
-                uiPrint(" *");
+                uiPrint(" *\n\n");
             } else {
-                uiPrint("  ");
-                uiPrint("%s  ", name.c_str());
-                uiPrint("%s", value.c_str());
+                uiAdvanceCursor(2);
+                uiPrint("%s  %s\n\n", name.c_str(), value.c_str());
             }
-
-            uiPrint("\n\n");
         }
 
         uiSetTextColor(TEXT_COLOR_NONE);
     }
 
     if(!message.empty()) {
-        int newlines = height - 1 - (numOptions * 2 + 2) - 1;
-        for(int i = 0; i < newlines; i++) {
-            uiPrint("\n");
-        }
-
-        int spaces = width - 1 - message.length();
-        for(int i = 0; i < spaces; i++) {
-            uiPrint(" ");
-        }
-
-        uiPrint("%s\n", message.c_str());
+        uiSetLine(height - 2);
+        uiAdvanceCursor(width - message.length());
+        uiPrint("%s", message.c_str());
 
         message = "";
     }
 }
 
 void MainMenu::printMessage(const std::string& m) {
-    bool hadPreviousMessage = !message.empty();
-    message = m;
-
     u32 width = 0;
     u32 height = 0;
     uiGetSize(&width, &height);
 
-    if(hadPreviousMessage) {
-        uiPrint("\r");
+    if(m.length() > width) {
+        message = m.substr(0, width);
     } else {
-        int newlines = height - 1 - (getSubMenuItemCount(currMenu) * 2 + 2) - 1;
-        for(int i = 0; i < newlines; i++) {
-            uiPrint("\n");
-        }
+        message = m;
     }
 
-    int spaces = width - 1 - (u32) message.length();
-    for(int i = 0; i < spaces; i++) {
-        uiPrint(" ");
-    }
-
+    uiSetLine(height - 2);
+    uiAdvanceCursor(width - message.length());
     uiPrint("%s", message.c_str());
+
     uiFlush();
 }
 

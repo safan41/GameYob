@@ -54,21 +54,21 @@ void CheatsMenu::draw(u32 width, u32 height) {
     u32 numPages = numCheats > 0 ? (numCheats - 1) / cheatsPerPage + 1 : 0;
     u32 page = selection / cheatsPerPage;
 
-    uiPrint("          Cheat Menu      ");
-    uiPrint("%" PRIu32 "/%" PRIu32 "\n\n", page + 1, numPages);
+    uiAdvanceCursor(10);
+    uiPrint("Cheat Menu      %" PRIu32 "/%" PRIu32 "\n\n", page + 1, numPages);
     for(u32 i = page * cheatsPerPage; i < numCheats && i < (page + 1) * cheatsPerPage; i++) {
         if(selection == i) {
             uiSetLineHighlighted(true);
         }
 
-        const std::string name = cheatEngine->getCheatName(i);
+        std::string name = cheatEngine->getCheatName(i);
+        if(name.length() > 25) {
+            name = name.substr(0, 25);
+        }
 
         uiPrint("%s", name.c_str());
 
-        size_t nameLen = name.length();
-        for(u32 j = 0; j < 25 - nameLen; j++) {
-            uiPrint(" ");
-        }
+        uiAdvanceCursor(25 - name.length());
 
         if(cheatEngine->isCheatEnabled(i)) {
             if(selection == i) {
@@ -77,11 +77,11 @@ void CheatsMenu::draw(u32 width, u32 height) {
                 uiSetTextColor(TEXT_COLOR_GREEN);
                 uiPrint("On");
                 uiSetTextColor(TEXT_COLOR_YELLOW);
-                uiPrint("  *");
+                uiPrint("  *\n");
                 uiSetTextColor(TEXT_COLOR_NONE);
             } else {
                 uiSetTextColor(TEXT_COLOR_GREEN);
-                uiPrint("  On   ");
+                uiPrint("  On\n");
                 uiSetTextColor(TEXT_COLOR_NONE);
             }
         } else {
@@ -91,17 +91,17 @@ void CheatsMenu::draw(u32 width, u32 height) {
                 uiSetTextColor(TEXT_COLOR_RED);
                 uiPrint("Off");
                 uiSetTextColor(TEXT_COLOR_YELLOW);
-                uiPrint(" *");
+                uiPrint(" *\n");
                 uiSetTextColor(TEXT_COLOR_NONE);
             } else {
                 uiSetTextColor(TEXT_COLOR_RED);
-                uiPrint("  Off  ");
+                uiPrint("  Off\n");
                 uiSetTextColor(TEXT_COLOR_NONE);
             }
         }
 
-        uiPrint("\n");
-
-        uiSetLineHighlighted(false);
+        if(selection == i) {
+            uiSetLineHighlighted(false);
+        }
     }
 }

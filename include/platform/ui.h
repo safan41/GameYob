@@ -38,6 +38,9 @@ void uiClear();
 void uiSetLineHighlighted(bool highlight);
 void uiSetTextColor(TextColor color);
 
+void uiAdvanceCursor(u32 n);
+void uiSetLine(u32 n);
+
 void uiPrint(const char* str, ...);
 void uiPrintv(const char* str, va_list list);
 

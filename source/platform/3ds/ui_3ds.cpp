@@ -161,6 +161,14 @@ void uiSetTextColor(TextColor color) {
     uiUpdateAttr();
 }
 
+void uiAdvanceCursor(u32 n) {
+    printf("\x1b[%" PRIu32 "C", n);
+}
+
+void uiSetLine(u32 n) {
+    printf("\x1b[%" PRIu32 ";1H", n);
+}
+
 void uiPrint(const char* str, ...) {
     va_list list;
     va_start(list, str);
