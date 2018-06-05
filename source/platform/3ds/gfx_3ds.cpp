@@ -370,7 +370,7 @@ static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u16 viewpo
 }
 
 void gfxDrawScreen() {
-    u8 gameScreen = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_GAME_SCREEN);
+    u8 gameScreen = configGetMultiChoice(GROUP_DISPLAY, GAMEYOB_GAME_SCREEN);
     u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
     u8 scaleFilter = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_FILTER);
 

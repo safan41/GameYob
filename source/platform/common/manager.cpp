@@ -758,6 +758,7 @@ void mgrReset() {
 }
 
 void mgrPrintDebug(const char* str, ...) {
+#ifndef BACKEND_SWITCH
     if(configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_CONSOLE_OUTPUT) == CONSOLE_OUTPUT_DEBUG && !menuIsVisible()) {
         va_list list;
         va_start(list, str);
@@ -766,6 +767,7 @@ void mgrPrintDebug(const char* str, ...) {
 
         uiFlush();
     }
+#endif
 }
 
 bool mgrIsRomLoaded() {
@@ -1275,6 +1277,7 @@ void mgrRun() {
                 gfxDrawScreen();
             }
 
+#ifndef BACKEND_SWITCH
             fps++;
 
             time = std::chrono::high_resolution_clock::now();
@@ -1326,6 +1329,7 @@ void mgrRun() {
                 fps = 0;
                 lastPrintTime = time;
             }
+#endif
         }
     }
 }

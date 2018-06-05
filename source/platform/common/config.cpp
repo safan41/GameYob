@@ -63,18 +63,35 @@ typedef struct {
 static ConfigGroup gameYob = {
         "GameYob",
         {
+#ifdef BACKEND_SWITCH
+                {
+                        "Pause In Menu",
+                        {"Off", "On"},
+                        PAUSE_IN_MENU_ON,
+                        nullptr
+                },
+#else
+                {
+                        "Pause In Menu",
+                        {"Off", "On"},
+                        PAUSE_IN_MENU_OFF,
+                        nullptr
+                },
                 {
                         "Console Output",
                         {"Off", "FPS", "Time", "FPS+Time", "Debug"},
                         CONSOLE_OUTPUT_OFF,
                         nullptr
                 },
+#endif
+#ifdef BACKEND_3DS
                 {
-                        "Pause In Menu",
-                        {"Off", "On"},
-                        PAUSE_IN_MENU_OFF,
-                        nullptr
-                }
+                        "Game Screen",
+                        {"Top", "Bottom"},
+                        GAME_SCREEN_TOP,
+                        uiUpdateScreen
+                },
+#endif
         },
         {
                 {
@@ -126,12 +143,6 @@ static ConfigGroup gameBoy = {
 static ConfigGroup display = {
         "Display",
         {
-                {
-                        "Game Screen",
-                        {"Top", "Bottom"},
-                        GAME_SCREEN_TOP,
-                        uiUpdateScreen
-                },
                 {
                         "Scaling Mode",
                         {"Off", "125%", "150%", "Aspect", "Full"},

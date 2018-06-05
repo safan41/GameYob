@@ -283,7 +283,7 @@ void gfxDrawScreen() {
                     int dstX = x + x1;
                     int dstY = y + y1;
 
-                    if(dstX >= 0 && dstY >= 0 && dstX < viewportWidth && dstY < viewportHeight) {
+                    if(dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
                         framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(borderBuffer[(y * borderHeight / scaledBorderHeight) * borderWidth + (x * borderWidth / scaledBorderWidth)]);
                     }
                 }
@@ -305,7 +305,7 @@ void gfxDrawScreen() {
                     int dstX = x + x1;
                     int dstY = y + y1;
 
-                    if(dstX >= 0 && dstY >= 0 && dstX < viewportWidth && dstY < viewportHeight) {
+                    if(dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
                         framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(transferBuffer[(y * screenTexHeight / screenHeight) * screenTexWidth + (x * screenTexWidth / screenWidth)]);
                     }
                 }

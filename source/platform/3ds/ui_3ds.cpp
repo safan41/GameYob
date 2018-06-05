@@ -49,7 +49,7 @@ void uiCleanup() {
 }
 
 void uiUpdateScreen() {
-    u8 gameScreen = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_GAME_SCREEN);
+    u8 gameScreen = configGetMultiChoice(GROUP_DISPLAY, GAMEYOB_GAME_SCREEN);
 
     gfxScreen_t screen = gameScreen == GAME_SCREEN_BOTTOM ? GFX_TOP : GFX_BOTTOM;
     if(currConsole != screen) {
@@ -82,7 +82,7 @@ void uiUpdateScreen() {
 }
 
 void uiGetSize(u32* width, u32* height) {
-    PrintConsole* console = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_GAME_SCREEN) == GAME_SCREEN_BOTTOM ? topConsole : bottomConsole;
+    PrintConsole* console = configGetMultiChoice(GROUP_DISPLAY, GAMEYOB_GAME_SCREEN) == GAME_SCREEN_BOTTOM ? topConsole : bottomConsole;
 
     if(width != nullptr) {
         *width = (u32) console->consoleWidth;
