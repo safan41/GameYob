@@ -10,13 +10,15 @@
 
 // TODO: Console-based UI draws slowly on Switch.
 
+static PrintConsole* console;
+
 static TextColor textColor;
 static bool highlighted;
 
 static std::queue<UIKey> keyQueue;
 
 void uiInit() {
-    consoleInit(nullptr);
+    console = consoleInit(nullptr);
     consoleDebugInit(debugDevice_SVC);
 }
 
@@ -27,8 +29,6 @@ void uiUpdateScreen() {
 }
 
 void uiGetSize(u32* width, u32* height) {
-    PrintConsole* console = consoleGetDefault();
-
     if(width != nullptr) {
         *width = (u32) console->consoleWidth;
     }
