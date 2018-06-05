@@ -6,6 +6,7 @@
 
 #include "platform/common/menu/menu.h"
 #include "platform/common/config.h"
+#include "platform/common/manager.h"
 #include "platform/gfx.h"
 #include "platform/system.h"
 #include "ppu.h"
@@ -16,6 +17,9 @@
 #define GB_FRAME_2X_HEIGHT (GB_FRAME_HEIGHT * 2)
 #define GB_FRAME_2X_PIXELS (GB_FRAME_2X_WIDTH * GB_FRAME_2X_HEIGHT)
 
+static u32 defaultWidth;
+static u32 defaultHeight;
+
 static u32* borderBuffer;
 static u32 borderWidth;
 static u32 borderHeight;
@@ -25,6 +29,7 @@ static u32* scale2xBuffer;
 
 bool gfxInit() {
     gfxInitDefault();
+    gfxGetFramebufferResolution(&defaultWidth, &defaultHeight);
 
     borderBuffer = nullptr;
 
@@ -95,117 +100,6 @@ void gfxLoadBorder(u8* imgData, int imgWidth, int imgHeight) {
     memcpy(borderBuffer, imgData, borderWidth * borderHeight * sizeof(u32));
 }
 
-#define SEEK_PIXEL(buf, x, y, pitch) ((buf) + ((((y) * (pitch)) + (x))))
-#define DO_SCALE2X() if(Bp != Hp && Dp != Fp) {                    \
-                         if(Dp == Bp) *(E0) = Dp;                  \
-                         else *(E0) = Ep;                          \
-                         if(Bp == Fp) *((E0) + 1) = Fp;            \
-                         else *((E0) + 1) = Ep;                    \
-                         if(Dp == Hp) *((E0) + dstPitch) = Dp;     \
-                         else *((E0) + dstPitch) = Ep;             \
-                         if(Hp == Fp) *((E0) + dstPitch + 1) = Fp; \
-                         else *((E0) + dstPitch + 1) = Ep;         \
-                     } else {                                      \
-                         *(E0) = Ep;                               \
-                         *((E0) + 1) = Ep;                         \
-                         *((E0) + dstPitch) = Ep;                  \
-                         *((E0) + dstPitch + 1) = Ep;              \
-                     }
-
-void gfxScale2xRGBA8888(u32* src, u32 srcPitch, u32* dst, u32 dstPitch, int width, int height) {
-    u32* E, *E0;
-    u32 Ep, Bp, Dp, Fp, Hp;
-
-    // Top line and top corners
-    E = SEEK_PIXEL(src, 0, 0, srcPitch);
-    E0 = SEEK_PIXEL(dst, 0, 0, dstPitch);
-    Ep = E[0];
-    Bp = Ep;
-    Dp = Ep;
-    Fp = E[1];
-    Hp = E[srcPitch];
-    DO_SCALE2X();
-
-    for(int x = 1; x < width - 1; x++) {
-        E += 1;
-        E0 += 2;
-        Dp = Ep;
-        Ep = Fp;
-        Fp = E[1];
-        Bp = Ep;
-        Hp = E[srcPitch];
-        DO_SCALE2X();
-    }
-
-    E += 1;
-    E0 += 2;
-    Dp = Ep;
-    Ep = Fp;
-    Bp = Ep;
-    Hp = E[srcPitch];
-    DO_SCALE2X();
-
-    // Middle Rows and sides
-    for(int y = 1; y < height - 1; y++) {
-        E = SEEK_PIXEL(src, 0, y, srcPitch);
-        E0 = SEEK_PIXEL(dst, 0, y * 2, dstPitch);
-        Ep = E[0];
-        Bp = E[-srcPitch];
-        Dp = Ep;
-        Fp = E[1];
-        Hp = E[srcPitch];
-        DO_SCALE2X();
-
-        for(int x = 1; x < width - 1; x++) {
-            E += 1;
-            E0 += 2;
-            Dp = Ep;
-            Ep = Fp;
-            Fp = E[1];
-            Bp = E[-srcPitch];
-            Hp = E[srcPitch];
-            DO_SCALE2X();
-        }
-
-        E += 1;
-        E0 += 2;
-        Dp = Ep;
-        Ep = Fp;
-        Bp = E[-srcPitch];
-        Hp = E[srcPitch];
-        DO_SCALE2X();
-    }
-
-    // Bottom Row and Bottom Corners
-    E = SEEK_PIXEL(src, 0, height - 1, srcPitch);
-    E0 = SEEK_PIXEL(dst, 0, (height - 1) * 2, dstPitch);
-    Ep = E[0];
-    Bp = E[-srcPitch];
-    Dp = Ep;
-    Fp = E[1];
-    Hp = Ep;
-    DO_SCALE2X();
-
-    for(int x = 1; x < width - 1; x++) {
-        E += 1;
-        E0 += 2;
-        Dp = Ep;
-        Ep = Fp;
-        Fp = E[1];
-        Bp = E[-srcPitch];
-        Hp = Ep;
-        DO_SCALE2X();
-    }
-
-    E += 1;
-    E0 += 2;
-    Dp = Ep;
-    Ep = Fp;
-    Bp = E[-srcPitch];
-    Hp = Ep;
-    DO_SCALE2X();
-}
-
 static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u32 viewportWidth, u32 viewportHeight) {
     u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
 
@@ -224,22 +118,10 @@ static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u32 viewpo
     }
 }
 
+// TODO: Scaling Filters, Full Screen Mode
 void gfxDrawScreen() {
     if(!menuIsVisible()) {
         u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
-        u8 scaleFilter = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_FILTER);
-
-        u32 screenTexWidth = GB_FRAME_WIDTH;
-        u32 screenTexHeight = GB_FRAME_HEIGHT;
-        u32* transferBuffer = screenBuffer;
-
-        if(scaleMode != SCALING_MODE_OFF && scaleFilter == SCALING_FILTER_SCALE2X) {
-            screenTexWidth = GB_FRAME_2X_WIDTH;
-            screenTexHeight = GB_FRAME_2X_HEIGHT;
-            transferBuffer = scale2xBuffer;
-
-            gfxScale2xRGBA8888(screenBuffer, GB_FRAME_WIDTH, scale2xBuffer, GB_FRAME_2X_WIDTH, GB_FRAME_WIDTH, GB_FRAME_HEIGHT);
-        }
 
         u32 viewportWidth = 0;
         u32 viewportHeight = 0;
@@ -247,44 +129,36 @@ void gfxDrawScreen() {
 
         float scaleWidth = 1;
         float scaleHeight = 1;
-        gfxScaleDimensions(&scaleWidth, &scaleHeight, viewportWidth, viewportHeight);
+        gfxScaleDimensions(&scaleWidth, &scaleHeight, defaultWidth, defaultHeight);
+
+        if(scaleWidth > scaleHeight) {
+            scaleWidth = scaleHeight;
+        }
+
+        u32 scaledViewportWidth = (u32) (defaultWidth / scaleWidth);
+        u32 scaledViewportHeight = (u32) (defaultHeight / scaleWidth);
+
+        if(viewportWidth != scaledViewportWidth || viewportHeight != scaledViewportHeight) {
+            gfxConfigureResolution(scaledViewportWidth, scaledViewportHeight);
+            framebuffer = (u32*) gfxGetFramebuffer(&viewportWidth, &viewportHeight);
+        }
 
         // TODO: Flip draw order when transparency is supported.
 
         // Draw the border.
         if(borderBuffer != nullptr && scaleMode != SCALING_MODE_FULL) {
-            // Calculate output dimensions.
-            int scaledBorderWidth = borderWidth;
-            int scaledBorderHeight = borderHeight;
-            if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS_SCALING) == CUSTOM_BORDERS_SCALING_SCALE_BASE) {
-                scaledBorderWidth *= scaleWidth;
-                scaledBorderHeight *= scaleHeight;
-            }
-
-            if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS_SCALING) == CUSTOM_BORDERS_SCALING_SCALE_BASE) {
-                if(scaleMode == SCALING_MODE_125) {
-                    scaledBorderWidth *= 1.25f;
-                    scaledBorderHeight *= 1.25f;
-                } else if(scaleMode == SCALING_MODE_150) {
-                    scaledBorderWidth *= 1.50f;
-                    scaledBorderHeight *= 1.50f;
-                } else if(scaleMode == SCALING_MODE_ASPECT) {
-                    scaledBorderWidth *= viewportHeight / (float) GB_FRAME_HEIGHT;
-                    scaledBorderHeight *= viewportHeight / (float) GB_FRAME_HEIGHT;
-                }
-            }
-
             // Calculate output points.
-            const int x1 = ((int) viewportWidth - scaledBorderWidth) / 2;
-            const int y1 = ((int) viewportHeight - scaledBorderHeight) / 2;
+            const int x1 = ((int) viewportWidth - borderWidth) / 2;
+            const int y1 = ((int) viewportHeight - borderHeight) / 2;
 
-            for(int x = 0; x < scaledBorderWidth; x++) {
-                for(int y = 0; y < scaledBorderHeight; y++) {
+            // Copy to framebuffer.
+            for(int x = 0; x < (int) borderWidth; x++) {
+                for(int y = 0; y < (int) borderHeight; y++) {
                     int dstX = x + x1;
                     int dstY = y + y1;
 
                     if(dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
-                        framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(borderBuffer[(y * borderHeight / scaledBorderHeight) * borderWidth + (x * borderWidth / scaledBorderWidth)]);
+                        framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(borderBuffer[y * borderWidth + x]);
                     }
                 }
             }
@@ -292,21 +166,18 @@ void gfxDrawScreen() {
 
         // Draw the screen.
         {
-            // Calculate output dimensions.
-            int screenWidth = (int) (GB_FRAME_WIDTH * scaleWidth);
-            int screenHeight = (int) (GB_FRAME_HEIGHT * scaleHeight);
-
             // Calculate output points.
-            const int x1 = ((int) viewportWidth - screenWidth) / 2;
-            const int y1 = ((int) viewportHeight - screenHeight) / 2;
+            const int x1 = ((int) viewportWidth - GB_FRAME_WIDTH) / 2;
+            const int y1 = ((int) viewportHeight - GB_FRAME_HEIGHT) / 2;
 
-            for(int x = 0; x < screenWidth; x++) {
-                for(int y = 0; y < screenHeight; y++) {
+            // Copy to framebuffer.
+            for(int x = 0; x < GB_FRAME_WIDTH; x++) {
+                for(int y = 0; y < GB_FRAME_HEIGHT; y++) {
                     int dstX = x + x1;
                     int dstY = y + y1;
 
                     if(dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
-                        framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(transferBuffer[(y * screenTexHeight / screenHeight) * screenTexWidth + (x * screenTexWidth / screenWidth)]);
+                        framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(screenBuffer[y * GB_FRAME_WIDTH + x]);
                     }
                 }
             }
@@ -314,8 +185,15 @@ void gfxDrawScreen() {
 
         gfxFlushBuffers();
         gfxSwapBuffers();
-        gfxWaitForVsync();
+
+        if(!mgrGetFastForward()) {
+            gfxWaitForVsync();
+        }
     }
+}
+
+void gfxResetResolution() {
+    gfxConfigureResolution(defaultWidth, defaultHeight);
 }
 
 #endif

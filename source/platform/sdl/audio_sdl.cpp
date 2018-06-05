@@ -43,14 +43,6 @@ u32 audioGetSampleRate() {
     return 44100;
 }
 
-void audioClear() {
-    if(!initialized) {
-        return;
-    }
-
-    SDL_ClearQueuedAudio(device);
-}
-
 void audioPlay(u32* buffer, long samples) {
     if(!initialized) {
         return;

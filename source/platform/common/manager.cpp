@@ -749,8 +749,6 @@ void mgrReset() {
     mgrRefreshBorder();
     mgrRefreshPalette();
 
-    audioClear();
-
     memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * GB_FRAME_HEIGHT * sizeof(u32));
     gfxDrawScreen();
 }
@@ -1095,7 +1093,7 @@ bool mgrGetFastForward() {
 }
 
 static bool mgrIsPaused() {
-    return emulationPaused || (configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_PAUSE_IN_MENU) == PAUSE_IN_MENU_ON && menuIsVisible());
+    return emulationPaused || (menuIsVisible() && configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_PAUSE_IN_MENU) == PAUSE_IN_MENU_ON);
 }
 
 static void mgrTakeScreenshot() {
@@ -1166,11 +1164,8 @@ void mgrRun() {
         }, romPath, {"sgb", "gbc", "cgb", "gb"}));
     }
 
-    if(menuIsVisible()) {
-        menuUpdate();
-    } else {
-        emulationPaused = false;
-    }
+    menuUpdate();
+    emulationPaused = emulationPaused && menuIsVisible();
 
     if(gameboy->isPoweredOn()) {
         if(inputKeyPressed(FUNC_KEY_SAVE)) {
@@ -1205,9 +1200,9 @@ void mgrRun() {
         if(!mgrIsPaused() && (mgrGetFastForward() || nanoTime - lastFrameTime >= NS_PER_FRAME)) {
             lastFrameTime = nanoTime;
 
-            if(!menuIsVisible()) {
-                u8 buttonsPressed = 0xFF;
+            u8 buttonsPressed = 0xFF;
 
+            if(!menuIsVisible()) {
                 if(inputKeyHeld(FUNC_KEY_UP)) {
                     buttonsPressed &= ~GB_UP;
                 }
@@ -1257,12 +1252,11 @@ void mgrRun() {
 
                     autoFireCounterB--;
                 }
-
-                gameboy->sgb.setController(0, buttonsPressed);
             }
 
             cheatEngine->applyGSCheats();
 
+            gameboy->sgb.setController(0, buttonsPressed);
             gameboy->runFrame();
 
             if(configGetMultiChoice(GROUP_SOUND, SOUND_MASTER) == SOUND_ON) {

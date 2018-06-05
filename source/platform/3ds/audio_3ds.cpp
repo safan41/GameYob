@@ -70,17 +70,6 @@ u32 audioGetSampleRate() {
     return 44100;
 }
 
-void audioClear() {
-    if(!initialized) {
-        return;
-    }
-
-    ndspChnWaveBufClear(0);
-    for(int i = 0; i < NUM_BUFFERS; i++) {
-        waveBuf[i].status = NDSP_WBUF_FREE;
-    }
-}
-
 void audioPlay(u32* buffer, long samples) {
     if(!initialized) {
         return;
@@ -90,32 +79,28 @@ void audioPlay(u32* buffer, long samples) {
     while(remaining > 0) {
         ndspWaveBuf* buf = &waveBuf[currBuffer];
 
-        if(buf->status != NDSP_WBUF_DONE && buf->status != NDSP_WBUF_FREE) {
-            if(mgrGetFastForward()) {
-                audioClear();
-                ndspChnWaveBufAdd(0, buf->next);
-            } else {
-                usleep(10);
-                continue;
+        if(buf->status == NDSP_WBUF_DONE || buf->status == NDSP_WBUF_FREE) {
+            long currSamples = remaining;
+            if((u32) currSamples > buf->nsamples - currPos) {
+                currSamples = buf->nsamples - currPos;
             }
-        }
 
-        long currSamples = remaining;
-        if((u32) currSamples > buf->nsamples - currPos) {
-            currSamples = buf->nsamples - currPos;
-        }
+            memcpy(&((u32*) buf->data_vaddr)[currPos], &buffer[samples - remaining], (size_t) currSamples * sizeof(u32));
 
-        memcpy(&((u32*) buf->data_vaddr)[currPos], &buffer[samples - remaining], (size_t) currSamples * sizeof(u32));
+            currPos += currSamples;
+            remaining -= currSamples;
 
-        currPos += currSamples;
-        remaining -= currSamples;
+            if(currPos >= buf->nsamples) {
+                DSP_FlushDataCache(buf->data_vaddr, buf->nsamples * sizeof(u32));
+                ndspChnWaveBufAdd(0, buf);
 
-        if(currPos >= buf->nsamples) {
-            DSP_FlushDataCache(buf->data_vaddr, buf->nsamples * sizeof(u32));
-            ndspChnWaveBufAdd(0, buf);
-
-            currPos -= buf->nsamples;
-            currBuffer = (currBuffer + 1) % NUM_BUFFERS;
+                currPos -= buf->nsamples;
+                currBuffer = (currBuffer + 1) % NUM_BUFFERS;
+            }
+        } else if(!mgrGetFastForward()) {
+            usleep(10);
+        } else {
+            break;
         }
     }
 }

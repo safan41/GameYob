@@ -39,6 +39,7 @@ void uiGetSize(u32* width, u32* height) {
 }
 
 void uiClear() {
+    gfxConfigureResolution(0, 0);
     consoleClear();
 }
 
@@ -127,7 +128,6 @@ void uiPrintv(const char* str, va_list list) {
 
 void uiFlush() {
     gfxFlushBuffers();
-    gfxSwapBuffers();
 }
 
 void uiPushInput(UIKey key) {

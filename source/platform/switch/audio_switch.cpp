@@ -53,11 +53,6 @@ u32 audioGetSampleRate() {
     return audoutGetSampleRate();
 }
 
-void audioClear() {
-    audoutStopAudioOut();
-    audoutStartAudioOut();
-}
-
 void audioPlay(u32* buffer, long samples) {
     long remaining = samples;
     while(remaining > 0) {
@@ -87,9 +82,10 @@ void audioPlay(u32* buffer, long samples) {
                 currBuffer = nullptr;
                 currPos = 0;
             }
-        } else {
-            // TODO: Force a clear if starved of buffers?
+        } else if(!mgrGetFastForward()) {
             svcSleepThread(10000);
+        } else {
+            break;
         }
     }
 }
