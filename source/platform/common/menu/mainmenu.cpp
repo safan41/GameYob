@@ -147,14 +147,18 @@ void MainMenu::draw(u32 width, u32 height) {
         uiAdvanceCursor(2);
     }
 
+    if((width & 1) == 0) {
+        menuPad++;
+    }
+
     uiAdvanceCursor(menuPad);
 
     if(currOption == -1) {
         uiSetTextColor(TEXT_COLOR_GREEN);
-        uiPrint(">\n\n");
+        uiPrint(">\n");
         uiSetTextColor(TEXT_COLOR_NONE);
     } else {
-        uiPrint(">\n\n");
+        uiPrint(">\n");
     }
 
     // Rest of the lines: options

@@ -751,7 +751,7 @@ void mgrReset() {
 
     audioClear();
 
-    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * 224 * sizeof(u32));
+    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * GB_FRAME_HEIGHT * sizeof(u32));
     gfxDrawScreen();
 }
 
