@@ -357,13 +357,14 @@ static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u16 viewpo
     *scaleWidth = 1;
     *scaleHeight = 1;
 
-    if(scaleMode == SCALING_MODE_125) {
-        *scaleWidth = *scaleHeight = 1.25f;
-    } else if(scaleMode == SCALING_MODE_150) {
-        *scaleWidth = *scaleHeight = 1.50f;
-    } else if(scaleMode == SCALING_MODE_ASPECT) {
+    if(scaleMode == SCALING_MODE_ASPECT) {
+        *scaleWidth = *scaleHeight = viewportHeight / (float) GB_FRAME_HEIGHT;
+    } else if(scaleMode == SCALING_MODE_ASPECT_SCREEN_ONLY) {
         *scaleWidth = *scaleHeight = viewportHeight / (float) GB_SCREEN_HEIGHT;
     } else if(scaleMode == SCALING_MODE_FULL) {
+        *scaleWidth = viewportWidth / (float) GB_FRAME_WIDTH;
+        *scaleHeight = viewportHeight / (float) GB_FRAME_HEIGHT;
+    } else if(scaleMode == SCALING_MODE_FULL_SCREEN_ONLY) {
         *scaleWidth = viewportWidth / (float) GB_SCREEN_WIDTH;
         *scaleHeight = viewportHeight / (float) GB_SCREEN_HEIGHT;
     }
@@ -469,7 +470,7 @@ void gfxDrawScreen() {
     }
 
     // Draw the border.
-    if(borderInit && scaleMode != SCALING_MODE_FULL) {
+    if(borderInit && scaleMode != SCALING_MODE_FULL_SCREEN_ONLY) {
         // Calculate the VBO dimensions.
         u16 scaledBorderWidth = borderWidth;
         u16 scaledBorderHeight = borderHeight;
