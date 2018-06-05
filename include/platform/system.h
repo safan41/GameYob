@@ -8,4 +8,6 @@ void systemExit();
 bool systemIsRunning();
 void systemRequestExit();
 
+u64 systemGetNanoTime();
+
 u32* systemGetCameraImage();

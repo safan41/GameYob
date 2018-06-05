@@ -8,8 +8,8 @@
 #endif
 
 #include <algorithm>
-#include <chrono>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <sstream>
 
@@ -490,15 +490,14 @@ static int fastForwardCounter;
 
 static u32 audioBuffer[2048];
 
-static std::chrono::time_point<std::chrono::high_resolution_clock, std::chrono::nanoseconds> lastFrameTime;
+static u64 lastFrameTime;
+static time_t lastPrintTime;
+static int fps;
 static bool fastForward;
 
 static std::string romName;
 
 static u32 numPrinted;
-
-static int fps;
-static std::chrono::time_point<std::chrono::high_resolution_clock, std::chrono::nanoseconds> lastPrintTime;
 
 static int autoFireCounterA;
 static int autoFireCounterB;
@@ -710,13 +709,12 @@ void mgrInit() {
 
     memset(audioBuffer, 0, sizeof(audioBuffer));
 
-    lastFrameTime = std::chrono::high_resolution_clock::now();
+    lastFrameTime = systemGetNanoTime();
+    lastPrintTime = time(NULL);
     fastForward = false;
+    fps = 0;
 
     romName = "";
-
-    fps = 0;
-    lastPrintTime = std::chrono::high_resolution_clock::now();
 
     autoFireCounterA = 0;
     autoFireCounterB = 0;
@@ -1203,10 +1201,9 @@ void mgrRun() {
             menuOpenMain();
         }
 
-        // TODO: Does not work properly on Switch?
-        auto time = std::chrono::high_resolution_clock::now();
-        if(!mgrIsPaused() && (mgrGetFastForward() || (time - lastFrameTime).count() >= NS_PER_FRAME)) {
-            lastFrameTime = time;
+        u64 nanoTime = systemGetNanoTime();
+        if(!mgrIsPaused() && (mgrGetFastForward() || nanoTime - lastFrameTime >= NS_PER_FRAME)) {
+            lastFrameTime = nanoTime;
 
             if(!menuIsVisible()) {
                 u8 buttonsPressed = 0xFF;
@@ -1280,8 +1277,10 @@ void mgrRun() {
 #ifndef BACKEND_SWITCH
             fps++;
 
-            time = std::chrono::high_resolution_clock::now();
-            if(std::chrono::duration_cast<std::chrono::seconds>(time - lastPrintTime).count() > 0) {
+            time_t timeSec = time(NULL);
+            if(timeSec - lastPrintTime > 0) {
+                lastPrintTime = timeSec;
+
                 u8 mode = configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_CONSOLE_OUTPUT);
                 bool showFPS = mode == CONSOLE_OUTPUT_FPS || mode == CONSOLE_OUTPUT_FPS_TIME;
                 bool showTime = mode == CONSOLE_OUTPUT_TIME || mode == CONSOLE_OUTPUT_FPS_TIME;
@@ -1298,8 +1297,7 @@ void mgrRun() {
                     }
 
                     if(showTime) {
-                        time_t timet = (time_t) std::chrono::duration_cast<std::chrono::seconds>(time.time_since_epoch()).count();
-                        char *timeString = ctime(&timet);
+                        char* timeString = ctime(&timeSec);
                         for(int i = 0; ; i++) {
                             if(timeString[i] == ':') {
                                 timeString += i - 2;
@@ -1327,7 +1325,6 @@ void mgrRun() {
                 }
 
                 fps = 0;
-                lastPrintTime = time;
             }
 #endif
         }
