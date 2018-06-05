@@ -8,6 +8,8 @@
 
 #include "platform/ui.h"
 
+// TODO: Console-based UI draws slowly on Switch.
+
 static TextColor textColor;
 static bool highlighted;
 

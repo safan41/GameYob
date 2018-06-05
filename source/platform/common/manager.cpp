@@ -1145,6 +1145,7 @@ static void mgrTakeScreenshot() {
 }
 
 void mgrRun() {
+    // TODO: Does not work properly on Switch?
     auto time = std::chrono::high_resolution_clock::now();
     if(mgrGetFastForward() || (time - lastFrameTime).count() >= NS_PER_FRAME) {
         lastFrameTime = time;
