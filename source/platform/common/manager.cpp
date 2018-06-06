@@ -1066,23 +1066,21 @@ static bool mgrTryBorderFile(const std::string& border) {
     return mgrTryRawBorderFile(border);
 }
 
-static bool mgrTryBorderName(const std::string& border) {
-    std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
-
-    for(const std::string& extension : supportedExtensions) {
-        if(mgrTryBorderFile(border + "." + extension)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void mgrRefreshBorder() {
     gfxLoadBorder(nullptr, 0, 0);
 
     if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON && gameboy != nullptr && gameboy->cartridge != nullptr) {
-        if(!mgrTryBorderName(romName)) {
+        std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
+
+        bool foundRomSpecific = false;
+        for(const std::string& extension : supportedExtensions) {
+            if(mgrTryBorderFile(romName + "." + extension)) {
+                foundRomSpecific = true;
+                break;
+            }
+        }
+
+        if(!foundRomSpecific) {
             mgrTryBorderFile(configGetPath(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH));
         }
     }
