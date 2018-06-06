@@ -43,9 +43,6 @@ void uiCleanup() {
     endwin();
 }
 
-void uiUpdateScreen() {
-}
-
 void uiGetSize(u32* width, u32* height) {
     int y = 0;
     int x = 0;
@@ -64,7 +61,7 @@ void uiClear() {
     wclear(window);
 }
 
-void uiClearAttr() {
+static void uiClearAttr() {
     if(textColor != TEXT_COLOR_NONE) {
         if(textColor == TEXT_COLOR_GRAY) {
             wattroff(window, A_DIM);
@@ -76,7 +73,7 @@ void uiClearAttr() {
     }
 }
 
-void uiUpdateAttr() {
+static void uiUpdateAttr() {
     if(textColor != TEXT_COLOR_NONE) {
         if(textColor == TEXT_COLOR_GRAY) {
             wattron(window, A_DIM);

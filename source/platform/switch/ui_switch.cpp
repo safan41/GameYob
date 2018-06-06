@@ -25,9 +25,6 @@ void uiInit() {
 void uiCleanup() {
 }
 
-void uiUpdateScreen() {
-}
-
 void uiGetSize(u32* width, u32* height) {
     if(width != nullptr) {
         *width = (u32) console->consoleWidth;
@@ -43,7 +40,7 @@ void uiClear() {
     consoleClear();
 }
 
-void uiUpdateAttr() {
+static void uiUpdateAttr() {
     if(highlighted) {
         printf("\x1b[0m\x1b[47m");
         switch(textColor) {

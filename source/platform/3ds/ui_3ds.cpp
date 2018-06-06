@@ -48,39 +48,6 @@ void uiCleanup() {
     }
 }
 
-void uiUpdateScreen() {
-    u8 gameScreen = configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_GAME_SCREEN);
-
-    gfxScreen_t screen = gameScreen == GAME_SCREEN_BOTTOM ? GFX_TOP : GFX_BOTTOM;
-    if(currConsole != screen) {
-        gfxScreen_t oldScreen = gameScreen == GAME_SCREEN_TOP ? GFX_TOP : GFX_BOTTOM;
-        gfxSetScreenFormat(oldScreen, GSP_BGR8_OES);
-        gfxSetDoubleBuffering(oldScreen, true);
-
-        for(u32 i = 0; i < 2; i++) {
-            u16 width = 0;
-            u16 height = 0;
-
-            memset(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, &width, &height), 0, (size_t) (width * height * 3));
-            memset(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, &width, &height), 0, (size_t) (width * height * 3));
-            memset(gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, &width, &height), 0, (size_t) (width * height * 3));
-
-            gfxSwapBuffers();
-        }
-
-        currConsole = screen;
-        gfxSetScreenFormat(screen, GSP_RGB565_OES);
-        gfxSetDoubleBuffering(screen, false);
-
-        gfxSwapBuffers();
-        gspWaitForVBlank();
-
-        PrintConsole* console = screen == GFX_TOP ? topConsole : bottomConsole;
-        console->frameBuffer = (u16*) gfxGetFramebuffer(screen, GFX_LEFT, nullptr, nullptr);
-        consoleSelect(console);
-    }
-}
-
 void uiGetSize(u32* width, u32* height) {
     PrintConsole* console = configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_GAME_SCREEN) == GAME_SCREEN_BOTTOM ? topConsole : bottomConsole;
 
@@ -94,10 +61,39 @@ void uiGetSize(u32* width, u32* height) {
 }
 
 void uiClear() {
+    gfxScreen_t screen = configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_GAME_SCREEN) == GAME_SCREEN_BOTTOM ? GFX_TOP : GFX_BOTTOM;
+    if(currConsole != screen) {
+        gfxSetScreenFormat(currConsole, GSP_BGR8_OES);
+        gfxSetDoubleBuffering(currConsole, true);
+
+        for(u32 i = 0; i < 2; i++) {
+            u16 width = 0;
+            u16 height = 0;
+
+            memset(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, &width, &height), 0, (size_t) (width * height * 3));
+            memset(gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, &width, &height), 0, (size_t) (width * height * 3));
+            memset(gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, &width, &height), 0, (size_t) (width * height * 3));
+
+            gfxSwapBuffers();
+        }
+
+        currConsole = screen;
+
+        gfxSetScreenFormat(screen, GSP_RGB565_OES);
+        gfxSetDoubleBuffering(screen, false);
+
+        gfxSwapBuffers();
+        gspWaitForVBlank();
+
+        PrintConsole* console = screen == GFX_TOP ? topConsole : bottomConsole;
+        console->frameBuffer = (u16*) gfxGetFramebuffer(screen, GFX_LEFT, nullptr, nullptr);
+        consoleSelect(console);
+    }
+
     consoleClear();
 }
 
-void uiUpdateAttr() {
+static void uiUpdateAttr() {
     if(highlighted) {
         printf("\x1b[0m\x1b[47m");
         switch(textColor) {

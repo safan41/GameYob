@@ -29,8 +29,6 @@ typedef enum {
 void uiInit();
 void uiCleanup();
 
-void uiUpdateScreen();
-
 void uiGetSize(u32* width, u32* height);
 
 void uiClear();

@@ -89,7 +89,7 @@ static ConfigGroup gameYob = {
                         "Game Screen",
                         {"Top", "Bottom"},
                         GAME_SCREEN_TOP,
-                        uiUpdateScreen
+                        nullptr
                 },
 #endif
         },
