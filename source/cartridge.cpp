@@ -79,10 +79,17 @@ Cartridge::Cartridge(std::istream& romData, u32 romSize) {
             break;
         case 0x01:
         case 0x02:
-        case 0x03:
+        case 0x03: {
             this->mbcType = MBC1;
+
+            static const u8 pattern[4] = {0xCE, 0xED, 0x66, 0x66};
+            this->multicart = this->totalRomBanks > 0x30
+                              && memcmp(this->getRomBank(0x10) + 0x104, pattern, sizeof(pattern)) == 0
+                              && memcmp(this->getRomBank(0x20) + 0x104, pattern, sizeof(pattern)) == 0;
+
             this->rockmanMapper = this->romTitle.compare("ROCKMAN 99") == 0;
             break;
+        }
         case 0x05:
         case 0x06:
             this->mbcType = MBC2;
@@ -214,7 +221,7 @@ void Cartridge::reset(Gameboy* gameboy) {
     this->sramEnabled = this->mbcType == MBC0;
 
     // MBC1
-    this->mbc1RamMode = false;
+    this->mbc1Mode = false;
 
     // MBC3
     this->mbc3Ctrl = 0;
@@ -285,7 +292,7 @@ std::istream& operator>>(std::istream& is, Cartridge& cart) {
 
     switch(cart.mbcType) {
         case MBC1:
-            is.read((char*) &cart.mbc1RamMode, sizeof(cart.mbc1RamMode));
+            is.read((char*) &cart.mbc1Mode, sizeof(cart.mbc1Mode));
             break;
         case MBC3:
             is.read((char*) &cart.mbc3Ctrl, sizeof(cart.mbc3Ctrl));
@@ -343,7 +350,7 @@ std::ostream& operator<<(std::ostream& os, const Cartridge& cart) {
 
     switch(cart.mbcType) {
         case MBC1:
-            os.write((char*) &cart.mbc1RamMode, sizeof(cart.mbc1RamMode));
+            os.write((char*) &cart.mbc1Mode, sizeof(cart.mbc1Mode));
             break;
         case MBC3:
             os.write((char*) &cart.mbc3Ctrl, sizeof(cart.mbc3Ctrl));
@@ -718,31 +725,58 @@ void Cartridge::m1w(u16 addr, u8 val) {
             val = val ? val : 1; // Writing 0 for the lower 5 bits translates to 1.
 
             if(this->rockmanMapper) {
+                // ROCKMAN 99 accesses banks in a different way.
                 this->romBank1 = (u8) ((val > 0xF) ? val - 8 : val);
+            } else if(this->multicart) {
+                // Multicarts only have 4 lower bits.
+                this->romBank1 = (u8) ((this->romBank1 & 0x30) | (val & 0xF));
             } else {
-                this->romBank1 = (u8) ((this->romBank1 & 0xE0) | val);
+                // Regular MBC1 mappers have 5 lower bits.
+                this->romBank1 = (u8) ((this->romBank1 & 0x60) | val);
             }
 
             this->mapRomBank1();
             break;
         case 0x2: /* 4000 - 5FFF */
             val &= 0x03;
-            if(this->mbc1RamMode) { /* RAM mode */
+
+            if(this->mbc1Mode) { /* RAM mode */
+                if(this->multicart) {
+                    // Set ROM bank 0.
+                    this->romBank0 = val << 4;
+                    this->mapRomBank0();
+                }
+
+                // Set SRAM bank.
                 this->sramBank = val;
                 this->mapSramBank();
-            } else { /* ROM mode */
-                this->romBank1 = (u8) ((val << 5) | (this->romBank1 & 0x1F));
+            } else {
+                // Set ROM bank 1.
+                this->romBank1 = (u8) ((val << (this->multicart ? 4 : 5)) | (this->romBank1 & 0x1F));
                 this->mapRomBank1();
             }
 
             break;
         case 0x3: /* 6000 - 7FFF */
-            this->mbc1RamMode = (bool) (val & 1);
-            if(this->mbc1RamMode) {
-                // Cannot access ROM banks after 0x1F in RAM mode.
-                this->romBank1 &= 0x1F;
-                this->mapRomBank1();
+            this->mbc1Mode = (bool) (val & 1);
+
+            if(this->mbc1Mode) {
+                if(this->multicart) {
+                    // Map ROM bank 0 from upper bits of ROM bank 1.
+                    this->romBank0 = this->romBank1 & 0x30;
+                    this->mapRomBank0();
+                } else {
+                    // Cannot access ROM banks after 0x1F in RAM mode.
+                    this->romBank1 &= 0x1F;
+                    this->mapRomBank1();
+                }
             } else {
+                if(this->multicart) {
+                    // Reset ROM bank 0 to base.
+                    this->romBank0 = 0;
+                    this->mapRomBank0();
+                }
+
                 // Cannot access other RAM banks in ROM mode.
                 this->sramBank = 0;
                 this->mapSramBank();

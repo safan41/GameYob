@@ -214,6 +214,7 @@ private:
     u16 totalRomBanks;
     u8 totalRamBanks;
     MBCType mbcType;
+    bool multicart;
     bool rockmanMapper;
     bool rumble;
 
@@ -242,7 +243,7 @@ private:
     bool sramEnabled;
 
     // MBC1
-    bool mbc1RamMode;
+    bool mbc1Mode;
 
     // MBC3
     u8 mbc3Ctrl;
