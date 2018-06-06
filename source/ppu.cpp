@@ -405,7 +405,7 @@ void PPU::write(u16 addr, u8 val) {
                         this->gameboy->mmu.writeIO(HDMA5, (u8) (val | 0x80));
                     }
                 } else {
-                    if(((val >> 7) & 1) == 0) {
+                    if((val & 0x80) == 0) {
                         u8 bank = (u8) (this->gameboy->gbMode == MODE_CGB && (this->gameboy->mmu.readIO(VBK) & 0x1) != 0);
                         u16 src = (u16) ((this->gameboy->mmu.readIO(HDMA2) | (this->gameboy->mmu.readIO(HDMA1) << 8)) & 0xFFF0);
                         u16 dst = (u16) ((this->gameboy->mmu.readIO(HDMA4) | (this->gameboy->mmu.readIO(HDMA3) << 8)) & 0x1FF0);
