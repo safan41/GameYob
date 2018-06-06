@@ -21,12 +21,16 @@ bool systemInit(int argc, char* argv[]) {
     uiInit();
     inputInit();
 
+    osSetSpeedupEnable(true);
+
     requestedExit = false;
 
     return true;
 }
 
 void systemExit() {
+    osSetSpeedupEnable(false);
+
     inputCleanup();
     uiCleanup();
     audioCleanup();
