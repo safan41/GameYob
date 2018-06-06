@@ -559,6 +559,8 @@ inline void PPU::updateLineTile(u8 map, u8 x, u8 y) {
 }
 
 inline void PPU::updateLineSprites() {
+    bool cgb = this->gameboy->gbMode == MODE_CGB;
+
     u8 ly = this->gameboy->mmu.readIO(LY);
 
     bool large = (this->gameboy->mmu.readIO(LCDC) & 4) != 0;
@@ -578,9 +580,17 @@ inline void PPU::updateLineSprites() {
         u8 tile = (u8) (this->oam[offset + 2] & ~((u8) large));
         u8 flags = this->oam[offset + 3];
 
-        line->palette = (u8) (flags & 7);
-        u8 bank = (u8) ((flags >> 3) & 1);
-        line->obp = (u8) ((flags >> 4) & 1);
+        u8 bank;
+        if(cgb) {
+            line->palette = (u8) (flags & 7);
+            bank = (u8) ((flags >> 3) & 1);
+            line->obp = 0;
+        } else {
+            line->palette = 0;
+            bank = 0;
+            line->obp = (u8) ((flags >> 4) & 1);
+        }
+
         bool flipX = (bool) ((flags >> 5) & 1);
         ty ^= (u8) (((flags >> 6) & 1) * (height - 1));
         u8 depth = (u8) (2 - ((flags >> 6) & 2));
