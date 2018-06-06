@@ -217,6 +217,7 @@ void MMU::write(u16 addr, u8 val) {
                         case BGP:
                         case OBP0:
                         case OBP1:
+                        case WX:
                         case VBK:
                         case BCPS:
                         case BCPD:

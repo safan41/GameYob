@@ -62,6 +62,9 @@ private:
 
     void checkLYC();
 
+    bool isWindowEnabled();
+    void checkWindow(bool wasEnabled, bool nowEnabled);
+
     void updateLineTile(u8 map, u8 x, u8 y);
     void updateLineSprites();
 
@@ -77,9 +80,8 @@ private:
 
     u8 scanlineX;
 
-    TileLine currTileLines[2];
-    SpriteLine currSpriteLines[10];
-    u8 currSprites;
+    u8 winDisabledLine;
+    u8 winLineOffset;
 
     u8 vram[2][0x2000];
     u8 oam[0xA0];
@@ -91,4 +93,8 @@ private:
 
     u8 expandedBgp[4];
     u8 expandedObp[8];
+
+    TileLine currTileLines[2];
+    SpriteLine currSpriteLines[10];
+    u8 currSprites;
 };

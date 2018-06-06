@@ -83,9 +83,8 @@ void PPU::reset() {
 
     this->scanlineX = 0;
 
-    memset(this->currTileLines, 0, sizeof(this->currTileLines));
-    memset(this->currSpriteLines, 0, sizeof(this->currSpriteLines));
-    this->currSprites = 0;
+    this->winDisabledLine = 0;
+    this->winLineOffset = 0;
 
     memset(this->vram, 0, sizeof(this->vram));
     memset(this->oam, 0, sizeof(this->oam));
@@ -113,6 +112,10 @@ void PPU::reset() {
         this->expandedBgp[0] = 0;
         memset(this->expandedObp, 3, sizeof(this->expandedObp));
     }
+
+    memset(this->currTileLines, 0, sizeof(this->currTileLines));
+    memset(this->currSpriteLines, 0, sizeof(this->currSpriteLines));
+    this->currSprites = 0;
 
     this->mapBanks();
 }
@@ -184,6 +187,10 @@ void PPU::update() {
                         }
 
                         this->gameboy->mmu.writeIO(IF, interrupts);
+
+                        this->winDisabledLine = 0;
+                        this->winLineOffset = 0;
+
                         this->gameboy->ranFrame = true;
                     } else {
                         this->gameboy->mmu.writeIO(STAT, (u8) ((stat & ~3) | LCD_ACCESS_OAM));
@@ -265,16 +272,34 @@ void PPU::update() {
     }
 }
 
+inline bool PPU::isWindowEnabled() {
+    return (this->gameboy->mmu.readIO(LCDC) & 0x20) != 0 && this->gameboy->mmu.readIO(WX) < GB_SCREEN_WIDTH + 7;
+}
+
+inline void PPU::checkWindow(bool wasEnabled, bool nowEnabled) {
+    // If window was enabled and is now no longer enabled, save the scanline it was disabled on.
+    // If window used to be enabled, was disabled, and is now enabled again, offset WY by the number of scanlines it was disabled for.
+    if((this->gameboy->mmu.readIO(STAT) & 3) != LCD_VBLANK) {
+        if(wasEnabled && !nowEnabled) {
+            this->winDisabledLine = this->gameboy->mmu.readIO(LY);
+        } else if(!wasEnabled && nowEnabled && this->winDisabledLine != 0) {
+            this->winLineOffset += this->gameboy->mmu.readIO(LY) - this->winDisabledLine;
+        }
+    }
+}
+
 void PPU::write(u16 addr, u8 val) {
     switch(addr) {
         case LCDC: {
-            u8 curr = this->gameboy->mmu.readIO(LCDC);
+            bool winWasEnabled = this->isWindowEnabled();
+
+            u8 prev = this->gameboy->mmu.readIO(LCDC);
             this->gameboy->mmu.writeIO(LCDC, val);
 
-            if((curr & 0x80) && !(val & 0x80)) {
+            if((prev & 0x80) && !(val & 0x80)) {
                 this->gameboy->mmu.writeIO(LY, 0);
                 this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~3) | LCD_HBLANK));
-            } else if(!(curr & 0x80) && (val & 0x80)) {
+            } else if(!(prev & 0x80) && (val & 0x80)) {
                 this->gameboy->mmu.writeIO(LY, 0);
                 this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~3) | LCD_ACCESS_OAM));
 
@@ -282,6 +307,13 @@ void PPU::write(u16 addr, u8 val) {
                 this->gameboy->cpu.setEventCycle(this->lastScanlineCycle + modeCycles[LCD_ACCESS_OAM]);
             }
 
+            this->checkWindow(winWasEnabled, this->isWindowEnabled());
+            break;
+        }
+        case WX: {
+            bool winWasEnabled = this->isWindowEnabled();
+            this->gameboy->mmu.writeIO(WX, val);
+            this->checkWindow(winWasEnabled, this->isWindowEnabled());
             break;
         }
         case STAT:
@@ -483,6 +515,8 @@ std::istream& operator>>(std::istream& is, PPU& ppu) {
     is.read((char*) &ppu.lastPhaseCycle, sizeof(ppu.lastPhaseCycle));
     is.read((char*) &ppu.halfSpeed, sizeof(ppu.halfSpeed));
     is.read((char*) &ppu.scanlineX, sizeof(ppu.scanlineX));
+    is.read((char*) &ppu.winDisabledLine, sizeof(ppu.winDisabledLine));
+    is.read((char*) &ppu.winLineOffset, sizeof(ppu.winLineOffset));
     is.read((char*) ppu.vram, sizeof(ppu.vram));
     is.read((char*) ppu.oam, sizeof(ppu.oam));
     is.read((char*) ppu.rawBgPalette, sizeof(ppu.rawBgPalette));
@@ -502,6 +536,8 @@ std::ostream& operator<<(std::ostream& os, const PPU& ppu) {
     os.write((char*) &ppu.lastPhaseCycle, sizeof(ppu.lastPhaseCycle));
     os.write((char*) &ppu.halfSpeed, sizeof(ppu.halfSpeed));
     os.write((char*) &ppu.scanlineX, sizeof(ppu.scanlineX));
+    os.write((char*) &ppu.winDisabledLine, sizeof(ppu.winDisabledLine));
+    os.write((char*) &ppu.winLineOffset, sizeof(ppu.winLineOffset));
     os.write((char*) ppu.vram, sizeof(ppu.vram));
     os.write((char*) ppu.oam, sizeof(ppu.oam));
     os.write((char*) ppu.rawBgPalette, sizeof(ppu.rawBgPalette));
@@ -676,7 +712,7 @@ inline void PPU::drawPixel(u8 x, u8 y) {
                 // Window
                 if((lcdc & 0x20) != 0) {
                     u8 wx = this->gameboy->mmu.readIO(WX);
-                    u8 wy = this->gameboy->mmu.readIO(WY);
+                    u8 wy = this->gameboy->mmu.readIO(WY) + this->winLineOffset;
                     if(y >= wy && x >= wx - 7) {
                         u8 map = (u8) ((lcdc >> 6) & 1);
                         u8 pixelX = (u8) ((x - wx + 7) & 0xFF);
@@ -822,8 +858,8 @@ inline void PPU::drawScanline(u8 scanline) {
                 // Window
                 if((lcdc & 0x20) != 0) {
                     u8 wx = this->gameboy->mmu.readIO(WX);
-                    u8 wy = this->gameboy->mmu.readIO(WY);
-                    if(wy <= scanline && wy < GB_SCREEN_HEIGHT && wx >= 0 && wx < 167) {
+                    u8 wy = this->gameboy->mmu.readIO(WY) + this->winLineOffset;
+                    if(wy <= scanline && wy < GB_SCREEN_HEIGHT && wx < GB_SCREEN_WIDTH + 7) {
                         s16 basePixelX = (s16) (wx - 7);
                         s16 baseTileX = (s16) (basePixelX >> 3);
 

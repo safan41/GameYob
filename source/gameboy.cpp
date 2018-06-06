@@ -12,7 +12,7 @@
 #include "serial.h"
 #include "timer.h"
 
-static const u8 STATE_VERSION = 12;
+static const u8 STATE_VERSION = 13;
 
 Gameboy::Gameboy() : mmu(this), cpu(this), ppu(this), apu(this), sgb(this), timer(this), serial(this) {
     this->cartridge = nullptr;
