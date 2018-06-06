@@ -140,7 +140,7 @@ void PPU::update() {
         this->lastScanlineCycle = this->gameboy->cpu.getCycle();
 
         this->gameboy->mmu.writeIO(LY, 0);
-        this->gameboy->mmu.writeIO(STAT, (u8) (this->gameboy->mmu.readIO(STAT) & 0xF8));
+        this->gameboy->mmu.writeIO(STAT, (u8) (this->gameboy->mmu.readIO(STAT) & ~7));
 
         // Ensure that we continue to return execution to frontend every frame, despite the LCD being off.
         while(this->gameboy->cpu.getCycle() >= this->lastPhaseCycle + (CYCLES_PER_FRAME << this->halfSpeed)) {
@@ -164,7 +164,6 @@ void PPU::update() {
 
             u8 stat = this->gameboy->mmu.readIO(STAT);
             u8 ly = this->gameboy->mmu.readIO(LY);
-            u8 hdma5 = this->gameboy->mmu.readIO(HDMA5);
 
             this->lastScanlineCycle += modeCycles[stat & 3] << this->halfSpeed;
 
@@ -173,6 +172,7 @@ void PPU::update() {
                     ly++;
                     this->gameboy->mmu.writeIO(LY, ly);
                     this->checkLYC();
+                    stat = this->gameboy->mmu.readIO(STAT);
 
                     if(ly >= GB_SCREEN_HEIGHT) {
                         this->gameboy->mmu.writeIO(STAT, (u8) ((stat & ~3) | LCD_VBLANK));
@@ -223,7 +223,7 @@ void PPU::update() {
 
                     this->gameboy->mmu.writeIO(STAT, (u8) ((stat & ~3) | LCD_ACCESS_OAM_VRAM));
                     break;
-                case LCD_ACCESS_OAM_VRAM:
+                case LCD_ACCESS_OAM_VRAM: {
                     if(!this->gameboy->settings.getOption(GB_OPT_PER_PIXEL_RENDERING) && this->gameboy->settings.getOption(GB_OPT_DRAW_ENABLED)) {
                         this->drawScanline(ly);
                     }
@@ -234,6 +234,7 @@ void PPU::update() {
                         this->gameboy->mmu.writeIO(IF, (u8) (this->gameboy->mmu.readIO(IF) | INT_LCD));
                     }
 
+                    u8 hdma5 = this->gameboy->mmu.readIO(HDMA5);
                     if(this->gameboy->gbMode == MODE_CGB && (hdma5 & 0x80) == 0) {
                         u8 bank = (u8) (this->gameboy->gbMode == MODE_CGB && (this->gameboy->mmu.readIO(VBK) & 0x1) != 0);
                         u16 src = (u16) ((this->gameboy->mmu.readIO(HDMA2) | (this->gameboy->mmu.readIO(HDMA1) << 8)) & 0xFFF0);
@@ -254,6 +255,7 @@ void PPU::update() {
                     }
 
                     break;
+                }
                 default:
                     break;
             }
@@ -283,7 +285,7 @@ void PPU::write(u16 addr, u8 val) {
             break;
         }
         case STAT:
-            this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & 0x7) | (val & 0xF8)));
+            this->gameboy->mmu.writeIO(STAT, (u8) ((this->gameboy->mmu.readIO(STAT) & ~0x78) | (val & 0x78)));
             break;
         case LY:
             break;

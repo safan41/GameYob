@@ -243,7 +243,7 @@ void MMU::write(u16 addr, u8 val) {
                     }
                 }
 
-                return;
+                break;
             }
         default: {
             u8* bank = this->banks[area];
