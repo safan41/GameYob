@@ -815,14 +815,14 @@ static void mgrPowerOn(const std::string& romFile) {
         }
 
         cheatEngine->loadCheats(romName + ".cht");
-
-        if(mgrStateExists(-1)) {
-            mgrLoadState(-1);
-            mgrDeleteState(-1);
-        }
     }
 
     mgrReset();
+
+    if(mgrStateExists(-1)) {
+        mgrLoadState(-1);
+        mgrDeleteState(-1);
+    }
 }
 
 static void mgrWriteSave() {

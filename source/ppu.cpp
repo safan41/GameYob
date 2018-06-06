@@ -363,6 +363,8 @@ void PPU::write(u16 addr, u8 val) {
 
                     this->gameboy->mmu.writeIO(BCPS, (u8) (next | (bcps & 0x80) | 0x40));
                     this->gameboy->mmu.writeIO(BCPD, this->rawBgPalette[next]);
+                } else {
+                    this->gameboy->mmu.writeIO(BCPD, val);
                 }
             }
 
@@ -394,6 +396,8 @@ void PPU::write(u16 addr, u8 val) {
 
                     this->gameboy->mmu.writeIO(OCPS, (u8) (next | (ocps & 0x80) | 0x40));
                     this->gameboy->mmu.writeIO(OCPD, this->rawSprPalette[next]);
+                } else {
+                    this->gameboy->mmu.writeIO(OCPD, val);
                 }
             }
 
