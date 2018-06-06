@@ -1066,10 +1066,10 @@ static bool mgrTryBorderFile(const std::string& border) {
     return mgrTryRawBorderFile(border);
 }
 
-static std::vector<std::string> supportedImages = {"jpg", "png", "tga", "bmp", "psd", "gif", "hdr", "pic"};
-
 static bool mgrTryBorderName(const std::string& border) {
-    for(const std::string& extension : supportedImages) {
+    std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
+
+    for(const std::string& extension : supportedExtensions) {
         if(mgrTryBorderFile(border + "." + extension)) {
             return true;
         }

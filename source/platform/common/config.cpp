@@ -195,7 +195,7 @@ static ConfigGroup display = {
         {
                 {
                         "Custom Border Path",
-                        {"jpg", "png", "tga", "bmp", "psd", "gif", "hdr", "pic"},
+                        {"jpg", "jpeg", "png", "bmp", "psd", "tga", "gif", "hdr", "pic", "ppm", "pgm"},
                         "",
                         mgrRefreshBorder
                 }

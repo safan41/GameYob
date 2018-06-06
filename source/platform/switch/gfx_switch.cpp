@@ -119,7 +119,7 @@ static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u32 viewpo
     }
 }
 
-// TODO: Scaling Filters, Full Screen Modes
+// TODO: Scaling Filters, Full Screen Modes, Custom Border Scaling Options
 void gfxDrawScreen() {
     if(!menuIsVisible()) {
         u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
