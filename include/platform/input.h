@@ -38,8 +38,7 @@ bool inputKeyPressed(u32 key);
 void inputKeyRelease(u32 key);
 void inputReleaseAll();
 
-u16 inputGetMotionSensorX();
-u16 inputGetMotionSensorY();
+void inputGetMotionSensor(u16* x, u16* y);
 
 void inputSetRumble(bool rumble);
 

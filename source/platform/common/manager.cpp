@@ -769,8 +769,7 @@ void mgrInit() {
 
     gameboy->settings.printDebug = mgrPrintDebug;
 
-    gameboy->settings.readTiltX = inputGetMotionSensorX;
-    gameboy->settings.readTiltY = inputGetMotionSensorY;
+    gameboy->settings.readTilt = inputGetMotionSensor;
     gameboy->settings.setRumble = inputSetRumble;
 
     gameboy->settings.getCameraImage = systemGetCameraImage;

@@ -201,18 +201,12 @@ void inputReleaseAll() {
     }
 }
 
-u16 inputGetMotionSensorX() {
+void inputGetMotionSensor(u16* x, u16* y) {
     accelVector vec;
     hidAccelRead(&vec);
 
-    return (u16) ((vec.x >> 3) + 0x7FF);
-}
-
-u16 inputGetMotionSensorY() {
-    accelVector vec;
-    hidAccelRead(&vec);
-
-    return (u16) ((vec.z >> 3) + 0x7FF);
+    *x = (u16) ((vec.x >> 3) + 0x7FF);
+    *y = (u16) ((vec.z >> 3) + 0x7FF);
 }
 
 void inputSetRumble(bool rumble) {

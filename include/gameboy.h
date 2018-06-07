@@ -76,8 +76,7 @@ typedef enum {
 typedef struct {
     void (*printDebug)(const char* s, ...);
 
-    u16 (*readTiltX)();
-    u16 (*readTiltY)();
+    void (*readTilt)(u16* x, u16* y);
     void (*setRumble)(bool rumble);
 
     u32* (*getCameraImage)();

@@ -3,7 +3,6 @@
 #include <ctime>
 #include <istream>
 #include <ostream>
-#include <cartridge.h>
 
 #include "cpu.h"
 #include "gameboy.h"
@@ -233,15 +232,9 @@ void Cartridge::reset(Gameboy* gameboy) {
     this->mbc6SramBankB = 1;
 
     // MBC7
-    this->mbc7WriteEnable = false;
-    this->mbc7Cs = 0;
-    this->mbc7Sk = 0;
-    this->mbc7OpCode = 0;
-    this->mbc7Addr = 0;
-    this->mbc7Count = 0;
-    this->mbc7State = 0;
-    this->mbc7Buffer = 0;
-    this->mbc7RA = 0;
+    memset(&this->mbc7, 0, sizeof(this->mbc7));
+    this->mbc7.tiltX = 0x8000;
+    this->mbc7.tiltY = 0x8000;
 
     // HuC1
     this->huc1RamMode = false;
@@ -261,9 +254,7 @@ void Cartridge::reset(Gameboy* gameboy) {
     memset(this->cameraRegs, 0, sizeof(this->cameraRegs));
 
     // TAMA5
-    this->tama5.enabled = false;
-    this->tama5.reg = 0;
-    memset(this->tama5.registers, 0, sizeof(this->tama5.registers));
+    memset(&this->tama5, 0, sizeof(this->tama5));
 
     this->mapBanks();
 }
@@ -304,15 +295,7 @@ std::istream& operator>>(std::istream& is, Cartridge& cart) {
             is.read((char*) &cart.mbc6SramBankB, sizeof(cart.mbc6SramBankB));
             break;
         case MBC7:
-            is.read((char*) &cart.mbc7WriteEnable, sizeof(cart.mbc7WriteEnable));
-            is.read((char*) &cart.mbc7Cs, sizeof(cart.mbc7Cs));
-            is.read((char*) &cart.mbc7Sk, sizeof(cart.mbc7Sk));
-            is.read((char*) &cart.mbc7OpCode, sizeof(cart.mbc7OpCode));
-            is.read((char*) &cart.mbc7Addr, sizeof(cart.mbc7Addr));
-            is.read((char*) &cart.mbc7Count, sizeof(cart.mbc7Count));
-            is.read((char*) &cart.mbc7State, sizeof(cart.mbc7State));
-            is.read((char*) &cart.mbc7Buffer, sizeof(cart.mbc7Buffer));
-            is.read((char*) &cart.mbc7RA, sizeof(cart.mbc7RA));
+            is.read((char*) &cart.mbc7, sizeof(cart.mbc7));
             break;
         case HUC1:
             is.read((char*) &cart.huc1RamMode, sizeof(cart.huc1RamMode));
@@ -362,15 +345,7 @@ std::ostream& operator<<(std::ostream& os, const Cartridge& cart) {
             os.write((char*) &cart.mbc6SramBankB, sizeof(cart.mbc6SramBankB));
             break;
         case MBC7:
-            os.write((char*) &cart.mbc7WriteEnable, sizeof(cart.mbc7WriteEnable));
-            os.write((char*) &cart.mbc7Cs, sizeof(cart.mbc7Cs));
-            os.write((char*) &cart.mbc7Sk, sizeof(cart.mbc7Sk));
-            os.write((char*) &cart.mbc7OpCode, sizeof(cart.mbc7OpCode));
-            os.write((char*) &cart.mbc7Addr, sizeof(cart.mbc7Addr));
-            os.write((char*) &cart.mbc7Count, sizeof(cart.mbc7Count));
-            os.write((char*) &cart.mbc7State, sizeof(cart.mbc7State));
-            os.write((char*) &cart.mbc7Buffer, sizeof(cart.mbc7Buffer));
-            os.write((char*) &cart.mbc7RA, sizeof(cart.mbc7RA));
+            os.write((char*) &cart.mbc7, sizeof(cart.mbc7));
             break;
         case HUC1:
             os.write((char*) &cart.huc1RamMode, sizeof(cart.huc1RamMode));
@@ -585,37 +560,18 @@ u8 Cartridge::m3r(u16 addr) {
 /* MBC7 */
 u8 Cartridge::m7r(u16 addr) {
     switch(addr & 0xF0) {
-        case 0x00:
-        case 0x10:
-        case 0x60:
-        case 0x70:
-            return 0;
         case 0x20:
-            if(this->gameboy->settings.readTiltX == nullptr) {
-                return 0xFF;
-            }
-
-            return (u8) (this->gameboy->settings.readTiltX() & 0xFF);
+            return (u8) (this->mbc7.tiltX & 0xFF);
         case 0x30:
-            if(this->gameboy->settings.readTiltX == nullptr) {
-                return 0x07;
-            }
-
-            return (u8) ((this->gameboy->settings.readTiltX() >> 8) & 0xFF);
+            return (u8) ((this->mbc7.tiltX >> 8) & 0xFF);
         case 0x40:
-            if(this->gameboy->settings.readTiltY == nullptr) {
-                return 0xFF;
-            }
-
-            return (u8) (this->gameboy->settings.readTiltY() & 0xFF);
+            return (u8) (this->mbc7.tiltY & 0xFF);
         case 0x50:
-            if(this->gameboy->settings.readTiltY == nullptr) {
-                return 0x07;
-            }
-
-            return (u8) ((this->gameboy->settings.readTiltY() >> 8) & 0xFF);
+            return (u8) ((this->mbc7.tiltY >> 8) & 0xFF);
+        case 0x60:
+            return 0;
         case 0x80:
-            return this->mbc7RA;
+            return this->mbc7.status;
         default:
             return 0xFF;
     }
@@ -859,11 +815,11 @@ void Cartridge::m5w(u16 addr, u8 val) {
             this->sramEnabled = (val & 0xF) == 0xA;
             this->mapSramBank();
             break;
-        case 0x2: /* 2000 - 3FFF */
+        case 0x2: /* 2000 - 2FFF */
             this->romBank1 = (this->romBank1 & 0x100) | val;
             this->mapRomBank1();
             break;
-        case 0x3:
+        case 0x3: /* 3000 - 3FFF */
             this->romBank1 = (this->romBank1 & 0xFF) | ((val & 1) << 8);
             this->mapRomBank1();
             break;
@@ -929,18 +885,28 @@ void Cartridge::m6w(u16 addr, u8 val) {
     }
 }
 
-// TODO: Revise MBC7 implementation to be more accurate.
 /* MBC7 */
 void Cartridge::m7w(u16 addr, u8 val) {
     switch(addr >> 13) {
+        case 0x0: /* 0000 - 1FFF */
+            if((val & 0xF) == 0xA) {
+                this->mbc7.access |= 1;
+            } else {
+                this->mbc7.access &= ~1;
+            }
+
+            break;
         case 0x1: /* 2000 - 3FFF */
-            val &= 0x7F;
-            this->romBank1 = val ? val : 1;
+            this->romBank1 = val & 0x7F;
             this->mapRomBank1();
             break;
         case 0x2: /* 4000 - 5FFF */
-            this->sramBank = val & 0xF;
-            this->mapSramBank();
+            if(val == 0x40) {
+                this->mbc7.access |= 2;
+            } else {
+                this->mbc7.access &= ~2;
+            }
+
             break;
         default:
             break;
@@ -1095,154 +1061,98 @@ void Cartridge::m3ws(u16 addr, u8 val) {
     }
 }
 
-#define MBC7_STATE_NONE 0
-#define MBC7_STATE_IDLE 1
-#define MBC7_STATE_READ_COMMAND 2
-#define MBC7_STATE_READ_ADDRESS 3
-#define MBC7_STATE_EXECUTE_COMMAND 4
-#define MBC7_STATE_READ 5
-#define MBC7_STATE_WRITE 6
+#define MBC7_STATE_IDLE 0
+#define MBC7_STATE_READ_COMMAND 1
+#define MBC7_STATE_DO 2
 
-#define MBC7_COMMAND_0 0
-#define MBC7_COMMAND_WRITE 1
-#define MBC7_COMMAND_READ 2
-#define MBC7_COMMAND_FILL 3
+#define MBC7_STATE_EEPROM_EWDS 0x10
+#define MBC7_STATE_EEPROM_WRAL 0x11
+#define MBC7_STATE_EEPROM_ERAL 0x12
+#define MBC7_STATE_EEPROM_EWEN 0x13
+#define MBC7_STATE_EEPROM_WRITE 0x14
+#define MBC7_STATE_EEPROM_READ 0x18
+#define MBC7_STATE_EEPROM_ERASE 0x1C
 
-// TODO: Revise MBC7 implementation to be more accurate.
+#define MBC7_STATUS_DO 0x01
+#define MBC7_STATUS_DI 0x02
+#define MBC7_STATUS_CLK 0x40
+#define MBC7_STATUS_CS 0x80
+
 /* MBC7 */
 void Cartridge::m7ws(u16 addr, u8 val) {
-    if((addr & 0xF0) == 0x80) {
-        int oldCs = this->mbc7Cs;
-        int oldSk = this->mbc7Sk;
-
-        this->mbc7Cs = val >> 7;
-        this->mbc7Sk = (u8) ((val >> 6) & 1);
-
-        if(!oldCs && this->mbc7Cs) {
-            if(this->mbc7State == MBC7_STATE_WRITE) {
-                if(this->mbc7WriteEnable) {
-                    this->writeSram((u16) (this->mbc7Addr * 2), (u8) (this->mbc7Buffer >> 8));
-                    this->writeSram((u16) (this->mbc7Addr * 2 + 1), (u8) (this->mbc7Buffer & 0xff));
+    if(this->mbc7.access == 3) {
+        switch(addr & 0xF0) {
+            case 0x00:
+                this->mbc7.latch = (u8) ((val & 0x55) == 0x55);
+                if(this->mbc7.latch) {
+                    this->mbc7.tiltX = 0x8000;
+                    this->mbc7.tiltY = 0x8000;
                 }
 
-                this->mbc7State = MBC7_STATE_NONE;
-                this->mbc7RA = 1;
-            } else {
-                this->mbc7State = MBC7_STATE_IDLE;
-            }
-        }
-
-        if(!oldSk && this->mbc7Sk) {
-            if(this->mbc7State > MBC7_STATE_IDLE && this->mbc7State < MBC7_STATE_READ) {
-                this->mbc7Buffer <<= 1;
-                this->mbc7Buffer |= (val & 0x2) ? 1 : 0;
-                this->mbc7Count++;
-            }
-
-            switch(this->mbc7State) {
-                case MBC7_STATE_NONE:
-                    break;
-                case MBC7_STATE_IDLE:
-                    if(val & 0x02) {
-                        this->mbc7Count = 0;
-                        this->mbc7Buffer = 0;
-                        this->mbc7State = MBC7_STATE_READ_COMMAND;
+                break;
+            case 0x10:
+                this->mbc7.latch |= val & 0xAA;
+                if(this->mbc7.latch == 0xAB) {
+                    if(this->gameboy->settings.readTilt != nullptr) {
+                        this->gameboy->settings.readTilt(&this->mbc7.tiltX, &this->mbc7.tiltY);
+                    } else {
+                        this->mbc7.tiltX = 0x7FF;
+                        this->mbc7.tiltY = 0x7FF;
                     }
+                }
 
-                    break;
-                case MBC7_STATE_READ_COMMAND:
-                    if(this->mbc7Count == 2) {
-                        this->mbc7State = MBC7_STATE_READ_ADDRESS;
-                        this->mbc7Count = 0;
-                        this->mbc7OpCode = (u8) (this->mbc7Buffer & 3);
-                    }
+                this->mbc7.latch = 0;
+                break;
+            case 0x80: {
+                u8 oldEeprom = this->mbc7.status;
+                this->mbc7.status = val | MBC7_STATUS_DO;
 
-                    break;
-                case MBC7_STATE_READ_ADDRESS:
-                    if(this->mbc7Count == 8) {
-                        this->mbc7State = MBC7_STATE_EXECUTE_COMMAND;
-                        this->mbc7Count = 0;
-                        this->mbc7Addr = (u8) (this->mbc7Buffer & 0xFF);
-                        if(this->mbc7OpCode == 0) {
-                            switch(this->mbc7Addr >> 6) {
-                                case 0:
-                                    this->mbc7WriteEnable = false;
-                                    this->mbc7State = MBC7_STATE_NONE;
-                                    break;
-                                case 3:
-                                    this->mbc7WriteEnable = true;
-                                    this->mbc7State = MBC7_STATE_NONE;
-                                    break;
-                                default:
-                                    break;
-                            }
+                if((oldEeprom & MBC7_STATUS_CS) == 0 && (this->mbc7.status & MBC7_STATUS_CS) != 0) {
+                    this->mbc7.state = MBC7_STATE_IDLE;
+                }
+
+                if((oldEeprom & MBC7_STATUS_CLK) == 0 && (this->mbc7.status & MBC7_STATUS_CLK) != 0) {
+                    if(this->mbc7.state == MBC7_STATE_READ_COMMAND || this->mbc7.state == MBC7_STATE_EEPROM_WRITE || this->mbc7.state == MBC7_STATE_EEPROM_ERASE) {
+                        this->mbc7.sr <<= 1;
+                        this->mbc7.srBits++;
+
+                        if((this->mbc7.status & MBC7_STATUS_DI) != 0) {
+                            this->mbc7.sr |= 1;
                         }
                     }
 
-                    break;
-                case MBC7_STATE_EXECUTE_COMMAND:
-                    switch(this->mbc7OpCode) {
-                        case MBC7_COMMAND_0:
-                            if(this->mbc7Count == 16) {
-                                switch(this->mbc7Addr >> 6) {
-                                    case 0:
-                                        this->mbc7WriteEnable = false;
-                                        this->mbc7State = MBC7_STATE_NONE;
-                                        break;
-                                    case 1:
-                                        if(this->mbc7WriteEnable) {
-                                            for(int i = 0; i < 256; i++) {
-                                                this->writeSram((u16) (i * 2), (u8) (this->mbc7Buffer >> 8));
-                                                this->writeSram((u16) (i * 2 + 1), (u8) (this->mbc7Buffer & 0xFF));
-                                            }
-                                        }
+                    switch(this->mbc7.state) {
+                        case MBC7_STATE_IDLE:
+                            if((this->mbc7.status & MBC7_STATUS_DI) != 0) {
+                                this->mbc7.state = MBC7_STATE_READ_COMMAND;
+                                this->mbc7.sr = 0;
+                                this->mbc7.srBits = 0;
+                            }
 
-                                        this->mbc7State = MBC7_STATE_WRITE;
-                                        break;
-                                    case 2:
-                                        if(this->mbc7WriteEnable) {
-                                            for(int i = 0; i < 256; i++) {
-                                                this->writeSram((u16) (i * 2), 0xFF);
-                                                this->writeSram((u16) (i * 2 + 1), 0xFF);
-                                            }
-                                        }
-
-                                        this->mbc7State = MBC7_STATE_WRITE;
-                                        break;
-                                    case 3:
-                                        this->mbc7WriteEnable = true;
-                                        this->mbc7State = MBC7_STATE_NONE;
-                                        break;
-                                    default:
-                                        break;
+                            break;
+                        case MBC7_STATE_READ_COMMAND:
+                            if(this->mbc7.srBits == 10) {
+                                this->mbc7.state = 0x10 | (this->mbc7.sr >> 6);
+                                if((this->mbc7.state & 0xC) != 0) {
+                                    this->mbc7.state &= ~0x3;
                                 }
 
-                                this->mbc7Count = 0;
+                                this->mbc7.srBits = 0;
+                                this->mbc7.address = this->mbc7.sr & 0x7F;
                             }
 
                             break;
-                        case MBC7_COMMAND_WRITE:
-                            if(this->mbc7Count == 16) {
-                                this->mbc7State = MBC7_STATE_WRITE;
-                                this->mbc7RA = 0;
-                                this->mbc7Count = 0;
+                        case MBC7_STATE_DO:
+                            if(this->mbc7.sr >> 15) {
+                                this->mbc7.status |= MBC7_STATUS_DO;
+                            } else {
+                                this->mbc7.status &= ~MBC7_STATUS_DO;
                             }
 
-                            break;
-                        case MBC7_COMMAND_READ:
-                            if(this->mbc7Count == 1) {
-                                this->mbc7State = MBC7_STATE_READ;
-                                this->mbc7Count = 0;
-                                this->mbc7Buffer = (this->readSram((u16) (this->mbc7Addr * 2)) << 8) | this->readSram((u16) (this->mbc7Addr * 2 + 1));
-                            }
-
-                            break;
-                        case MBC7_COMMAND_FILL:
-                            if(this->mbc7Count == 16) {
-                                this->mbc7State = MBC7_STATE_WRITE;
-                                this->mbc7RA = 0;
-                                this->mbc7Count = 0;
-                                this->mbc7Buffer = 0xFFFF;
+                            this->mbc7.sr <<= 1;
+                            this->mbc7.srBits--;
+                            if(this->mbc7.srBits == 0) {
+                                this->mbc7.state = MBC7_STATE_IDLE;
                             }
 
                             break;
@@ -1250,19 +1160,76 @@ void Cartridge::m7ws(u16 addr, u8 val) {
                             break;
                     }
 
-                    break;
-                default:
-                    break;
-            }
-        } else if(oldSk && !this->mbc7Sk) {
-            if(this->mbc7State == MBC7_STATE_READ) {
-                this->mbc7RA = (u8) ((this->mbc7Buffer & 0x8000) ? 1 : 0);
-                this->mbc7Buffer <<= 1;
-                this->mbc7Count++;
-                if(this->mbc7Count == 16) {
-                    this->mbc7Count = 0;
-                    this->mbc7State = MBC7_STATE_NONE;
+                    switch(this->mbc7.state) {
+                        case MBC7_STATE_EEPROM_EWDS:
+                            this->mbc7.writable = false;
+                            this->mbc7.state = MBC7_STATE_IDLE;
+                            break;
+                        case MBC7_STATE_EEPROM_WRAL:
+                            if(this->mbc7.srBits == 16) {
+                                if(this->mbc7.writable) {
+                                    for(u8 i = 0; i < 128; i++) {
+                                        this->writeSram((u16) (i * 2), (u8) (this->mbc7.sr >> 8));
+                                        this->writeSram((u16) (i * 2 + 1), (u8) (this->mbc7.sr & 0xFF));
+                                    }
+                                }
+
+                                this->mbc7.state = MBC7_STATE_IDLE;
+                            }
+
+                            break;
+                        case MBC7_STATE_EEPROM_ERAL:
+                            if(this->mbc7.writable) {
+                                for(u8 i = 0; i < 128; i++) {
+                                    this->writeSram((u16) (i * 2), 0xFF);
+                                    this->writeSram((u16) (i * 2 + 1), 0xFF);
+                                }
+                            }
+
+                            this->mbc7.state = MBC7_STATE_IDLE;
+                            break;
+                        case MBC7_STATE_EEPROM_EWEN:
+                            this->mbc7.writable = true;
+                            this->mbc7.state = MBC7_STATE_IDLE;
+                            break;
+                        case MBC7_STATE_EEPROM_WRITE:
+                            if(this->mbc7.srBits == 16) {
+                                if(this->mbc7.writable) {
+                                    this->writeSram((u16) (this->mbc7.address * 2), (u8) (this->mbc7.sr >> 8));
+                                    this->writeSram((u16) (this->mbc7.address * 2 + 1), (u8) (this->mbc7.sr & 0xFF));
+                                }
+
+                                this->mbc7.state = MBC7_STATE_IDLE;
+                            }
+
+                            break;
+                        case MBC7_STATE_EEPROM_READ:
+                            this->mbc7.srBits = 16;
+                            this->mbc7.sr = this->readSram((u16) (this->mbc7.address * 2)) << 8;
+                            this->mbc7.sr |= this->readSram((u16) (this->mbc7.address * 2 + 1));
+                            this->mbc7.state = MBC7_STATE_DO;
+                            this->mbc7.status &= ~MBC7_STATUS_DO;
+                            break;
+                        case MBC7_STATE_EEPROM_ERASE:
+                            if(this->mbc7.writable) {
+                                this->writeSram((u16) (this->mbc7.address * 2), 0xFF);
+                                this->writeSram((u16) (this->mbc7.address * 2 + 1), 0xFF);
+                            }
+
+                            this->mbc7.state = MBC7_STATE_IDLE;
+                            break;
+                        default:
+                            break;
+                    }
+                } else if((this->mbc7.status & MBC7_STATUS_CS) != 0 && (oldEeprom & MBC7_STATUS_CLK) != 0 && (this->mbc7.status & MBC7_STATUS_CLK) == 0) {
+                    if((oldEeprom & MBC7_STATUS_DO) == MBC7_STATUS_DO) {
+                        this->mbc7.status |= MBC7_STATUS_DO;
+                    } else {
+                        this->mbc7.status &= ~MBC7_STATUS_DO;
+                    }
                 }
+
+                break;
             }
         }
     }

@@ -255,15 +255,21 @@ private:
     u8 mbc6SramBankB;
 
     // MBC7
-    bool mbc7WriteEnable;
-    u8 mbc7Cs;
-    u8 mbc7Sk;
-    u8 mbc7OpCode;
-    u8 mbc7Addr;
-    u8 mbc7Count;
-    u8 mbc7State;
-    u16 mbc7Buffer;
-    u8 mbc7RA;
+    struct {
+        u8 access;
+        u8 latch;
+        u8 state;
+
+        u8 status;
+        u16 cmd;
+        u16 sr;
+        u8 srBits;
+        u16 address;
+        bool writable;
+
+        u16 tiltX;
+        u16 tiltY;
+    } mbc7;
 
     // HuC1
     bool huc1RamMode;

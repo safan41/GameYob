@@ -91,12 +91,25 @@ void inputReleaseAll() {
     }
 }
 
-u16 inputGetMotionSensorX() {
-    return 0x7FF;
-}
+void inputGetMotionSensor(u16* x, u16* y) {
+    *x = 0x7FF;
+    *y = 0x7FF;
 
-u16 inputGetMotionSensorY() {
-    return 0x7FF;
+    if(inputKeyHeld(FUNC_KEY_LEFT)) {
+        *x += 0x3FF;
+    }
+
+    if(inputKeyHeld(FUNC_KEY_RIGHT)) {
+        *x -= 0x3FF;
+    }
+
+    if(inputKeyHeld(FUNC_KEY_UP)) {
+        *y += 0x3FF;
+    }
+
+    if(inputKeyHeld(FUNC_KEY_DOWN)) {
+        *y -= 0x3FF;
+    }
 }
 
 void inputSetRumble(bool rumble) {

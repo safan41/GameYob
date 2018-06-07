@@ -191,12 +191,10 @@ void inputReleaseAll() {
     }
 }
 
-u16 inputGetMotionSensorX() {
-    return 0x7FF; // TODO
-}
-
-u16 inputGetMotionSensorY() {
-    return 0x7FF; // TODO
+void inputGetMotionSensor(u16* x, u16* y) {
+    // TODO
+    *x = 0x7FF;
+    *y = 0x7FF;
 }
 
 void inputSetRumble(bool rumble) {
