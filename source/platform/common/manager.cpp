@@ -1104,7 +1104,7 @@ void mgrRefreshBorder() {
     if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON && gameboy != nullptr && gameboy->cartridge != nullptr) {
         std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
 
-        const std::string basePath = mgrGetBasePath(GAMEYOB_CHEATS_PATH);
+        const std::string basePath = mgrGetBasePath(GAMEYOB_BORDER_PATH);
 
         bool foundRomSpecific = false;
         for(const std::string& extension : supportedExtensions) {
