@@ -1331,7 +1331,7 @@ void mgrRun() {
                 }
             }
 
-            cheatEngine->applyGSCheats();
+            cheatEngine->applyRamCheats();
 
             gameboy->sgb.setController(0, buttonsPressed);
             gameboy->runFrame();

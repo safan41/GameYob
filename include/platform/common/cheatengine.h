@@ -6,29 +6,9 @@
 
 class Gameboy;
 
-#define CHEAT_FLAG_ENABLED    (1 << 0)
-#define CHEAT_FLAG_TYPE_MASK  (3 << 1)
-#define CHEAT_FLAG_GAMEGENIE  (1 << 1)
-#define CHEAT_FLAG_GAMEGENIE1 (2 << 1)
-#define CHEAT_FLAG_GAMESHARK  (3 << 1)
-
-typedef struct cheat_t {
-    std::string name;
-    std::string cheatString;
-    u8 flags;
-    u8 data;
-    u16 address;
-    union {
-        u8 compare; /* For GameGenie codes */
-        u8 bank;    /* For Gameshark codes */
-    };
-    std::vector<u16> patchedBanks;  /* For GameGenie codes */
-    std::vector<u8> patchedValues; /* For GameGenie codes */
-} cheat_t;
-
 class CheatEngine {
 public:
-    CheatEngine(Gameboy* g);
+    CheatEngine(Gameboy* g) : gameboy(g) {}
 
     void loadCheats(const std::string& filename);
     void saveCheats(const std::string& filename);
@@ -36,19 +16,48 @@ public:
     inline u32 getNumCheats() { return (u32) cheatsVec.size(); }
 
     inline const std::string getCheatName(u32 cheat) { return cheatsVec[cheat].name; }
-    inline bool isCheatEnabled(u32 cheat) { return (cheatsVec[cheat].flags & CHEAT_FLAG_ENABLED) != 0; }
+    inline bool isCheatEnabled(u32 cheat) { return cheatsVec[cheat].enabled; }
 
-    bool addCheat(const std::string& name, const std::string& value);
+    void addCheat(const std::string& name, const std::string& value);
     void toggleCheat(u32 cheat, bool enabled);
 
-    void applyGSCheats();
+    void applyRamCheats();
 private:
+    typedef enum {
+        CHEAT_TYPE_UNKNOWN,
+        CHEAT_TYPE_GAMEGENIE_SHORT,
+        CHEAT_TYPE_GAMEGENIE_LONG,
+        CHEAT_TYPE_GAMESHARK
+    } CheatType;
+
+    typedef struct {
+        CheatType type;
+
+        u16 address;
+        u8 data;
+        union {
+            u8 compare; /* For GameGenie codes */
+            u8 bank;    /* For Gameshark codes */
+        };
+        std::vector<u16> patchedBanks;  /* For GameGenie codes */
+        std::vector<u8> patchedValues; /* For GameGenie codes */
+    } CheatLine;
+
+    typedef struct {
+        std::string name;
+        std::string value;
+        bool enabled;
+
+        std::vector<CheatLine> lines;
+    } Cheat;
+
     Gameboy* gameboy;
 
-    std::vector<cheat_t> cheatsVec;
+    std::vector<Cheat> cheatsVec;
 
-    void applyGGCheatsToBank(u16 romBank);
-    void unapplyGGCheat(u32 cheat);
+    static int parseCheatsIni(void* user, const char* section, const char* name, const char* value);
+    void parseLine(Cheat& cheat, const std::string& line);
 
-    static int parseCheats(void* user, const char* section, const char* name, const char* value);
+    void applyAllRomCheats();
+    void unapplyRomCheat(u32 cheat);
 };
