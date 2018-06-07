@@ -545,31 +545,27 @@ static u8 mgrGetOption(GameboyOption opt) {
     }
 }
 
-static std::string mgrGetSavePath() {
-    std::stringstream stream;
-
-    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_SAVE_PATH);
-    if(!basePath.empty()) {
-        stream << basePath;
-    } else {
-        stream << romDir;
+static std::string mgrGetBasePath(u8 option) {
+    std::string basePath = configGetPath(GROUP_GAMEYOB, option);
+    if(basePath.empty()) {
+        basePath = romDir;
     }
 
-    stream << "/" << romName << ".sav";
+    std::stringstream stream;
+
+    stream << basePath;
+    if(basePath.empty() || basePath[basePath.length() - 1] != '/') {
+        stream << "/";
+    }
+
+    stream << romName;
     return stream.str();
 }
 
 static std::string mgrGetStatePath(int stateNum) {
     std::stringstream stream;
 
-    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_SAVE_STATE_PATH);
-    if(!basePath.empty()) {
-        stream << basePath;
-    } else {
-        stream << romDir;
-    }
-
-    stream << "/" << romName;
+    stream << mgrGetBasePath(GAMEYOB_SAVE_STATE_PATH);
     if(stateNum == -1) {
         stream << ".yss";
     } else {
@@ -579,51 +575,12 @@ static std::string mgrGetStatePath(int stateNum) {
     return stream.str();
 }
 
-static std::string mgrGetCheatPath() {
-    std::stringstream stream;
-
-    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_CHEATS_PATH);
-    if(!basePath.empty()) {
-        stream << basePath;
-    } else {
-        stream << romDir;
-    }
-
-    stream << "/" << romName << ".cht";
-    return stream.str();
-}
-
-static std::string mgrGetBorderBasePath() {
-    std::stringstream stream;
-
-    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_BORDER_PATH);
-    if(!basePath.empty()) {
-        stream << basePath;
-    } else {
-        stream << romDir;
-    }
-
-    stream << "/" << romName;
-    return stream.str();
-}
-
 static std::string mgrGetPrintPath(bool& appending) {
-    std::stringstream baseStream;
-
-    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_PRINT_PATH);
-    if(!basePath.empty()) {
-        baseStream << basePath;
-    } else {
-        baseStream << romDir;
-    }
-
-    baseStream << "/" << romName << "-";
-
     // Find the first available "print number".
-    const std::string baseFile = baseStream.str();
+    const std::string baseFile = mgrGetBasePath(GAMEYOB_PRINT_PATH);
     while(true) {
         std::stringstream finalStream;
-        finalStream << baseFile << numPrinted << ".bmp";
+        finalStream << baseFile << "-" << numPrinted << ".bmp";
 
         const std::string finalFile = finalStream.str();
 
@@ -637,13 +594,11 @@ static std::string mgrGetPrintPath(bool& appending) {
                 mgrPrintDebug("The image to be appended to doesn't exist: %s\n", finalFile.c_str());
             }
 
-            break;
+            return finalFile;
         }
 
         numPrinted++;
     }
-
-    return baseStream.str();
 }
 
 static void mgrPrintImage(bool appending, u8* buf, int size, u8 palette) {
@@ -893,7 +848,7 @@ static void mgrPowerOn(const std::string& romFile) {
 
         romStream.close();
 
-        std::ifstream saveStream(mgrGetSavePath(), std::ios::binary);
+        std::ifstream saveStream(mgrGetBasePath(GAMEYOB_SAVE_PATH) + ".sav", std::ios::binary);
         if(saveStream.is_open()) {
             gameboy->cartridge->load(saveStream);
             saveStream.close();
@@ -901,7 +856,7 @@ static void mgrPowerOn(const std::string& romFile) {
             mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         }
 
-        cheatEngine->loadCheats(mgrGetCheatPath());
+        cheatEngine->loadCheats(mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht");
     }
 
     mgrReset();
@@ -917,7 +872,7 @@ static void mgrWriteSave() {
         return;
     }
 
-    std::ofstream stream(mgrGetSavePath(), std::ios::binary);
+    std::ofstream stream(mgrGetBasePath(GAMEYOB_SAVE_PATH) + ".sav", std::ios::binary);
     if(!stream.is_open()) {
         mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         return;
@@ -934,7 +889,7 @@ void mgrPowerOff(bool save) {
                 mgrWriteSave();
             }
 
-            cheatEngine->saveCheats(mgrGetCheatPath());
+            cheatEngine->saveCheats(mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht");
 
             Cartridge* cart = gameboy->cartridge;
             gameboy->cartridge = nullptr;
@@ -1149,7 +1104,7 @@ void mgrRefreshBorder() {
     if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON && gameboy != nullptr && gameboy->cartridge != nullptr) {
         std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
 
-        const std::string basePath = mgrGetBorderBasePath();
+        const std::string basePath = mgrGetBasePath(GAMEYOB_CHEATS_PATH);
 
         bool foundRomSpecific = false;
         for(const std::string& extension : supportedExtensions) {
