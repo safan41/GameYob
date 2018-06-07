@@ -225,6 +225,14 @@ private:
 
     u8* sram;
 
+    // General
+    u16 romBank0;
+    u16 romBank1;
+    u8 sramBank;
+    bool sramEnabled;
+
+#pragma pack(push, 1)
+
     struct {
         u32 seconds;
         u32 minutes;
@@ -236,23 +244,23 @@ private:
         u64 last;
     } rtcClock;
 
-    // General
-    u16 romBank0;
-    u16 romBank1;
-    u8 sramBank;
-    bool sramEnabled;
-
     // MBC1
-    bool mbc1Mode;
+    struct {
+        bool mode;
+    } mbc1;
 
     // MBC3
-    u8 mbc3Ctrl;
+    struct {
+        u8 ctrl;
+    } mbc3;
 
     // MBC6
-    u8 mbc6RomBank1A;
-    u8 mbc6RomBank1B;
-    u8 mbc6SramBankA;
-    u8 mbc6SramBankB;
+    struct {
+        u8 romBank1A;
+        u8 romBank1B;
+        u8 sramBankA;
+        u8 sramBankB;
+    } mbc6;
 
     // MBC7
     struct {
@@ -272,21 +280,29 @@ private:
     } mbc7;
 
     // HuC1
-    bool huc1RamMode;
+    struct {
+        bool ramMode;
+    } huc1;
 
     // HuC3
-    u8 huc3Mode;
-    u8 huc3Value;
-    u8 huc3Shift;
+    struct {
+        u8 mode;
+        u8 value;
+        u8 shift;
+    } huc3;
 
     // MMM01
-    bool mmm01BankSelected;
-    u8 mmm01RomBaseBank;
+    struct {
+        bool bankSelected;
+        u8 romBaseBank;
+    } mmm01;
 
     // CAMERA
-    bool cameraIO;
-    u64 cameraReadyCycle;
-    u8 cameraRegs[0x36];
+    struct {
+        bool io;
+        u64 readyCycle;
+        u8 regs[0x36];
+    } camera;
 
     // TAMA5
     struct {
@@ -295,4 +311,6 @@ private:
         u8 reg;
         u8 registers[0x10];
     } tama5;
+
+#pragma pack(pop)
 };

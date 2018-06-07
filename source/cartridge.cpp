@@ -3,6 +3,7 @@
 #include <ctime>
 #include <istream>
 #include <ostream>
+#include <cartridge.h>
 
 #include "cpu.h"
 #include "gameboy.h"
@@ -219,42 +220,26 @@ void Cartridge::reset(Gameboy* gameboy) {
     this->sramBank = 0;
     this->sramEnabled = this->mbcType == MBC0;
 
-    // MBC1
-    this->mbc1Mode = false;
-
-    // MBC3
-    this->mbc3Ctrl = 0;
+    // MBC-Specific Data
+    memset(&this->mbc1, 0, sizeof(this->mbc1));
+    memset(&this->mbc3, 0, sizeof(this->mbc3));
+    memset(&this->mbc6, 0, sizeof(this->mbc6));
+    memset(&this->mbc7, 0, sizeof(this->mbc7));
+    memset(&this->huc1, 0, sizeof(this->huc1));
+    memset(&this->huc3, 0, sizeof(this->huc3));
+    memset(&this->mmm01, 0, sizeof(this->mmm01));
+    memset(&this->camera, 0, sizeof(this->camera));
+    memset(&this->tama5, 0, sizeof(this->tama5));
 
     // MBC6
-    this->mbc6RomBank1A = 2;
-    this->mbc6RomBank1B = 3;
-    this->mbc6SramBankA = 0;
-    this->mbc6SramBankB = 1;
+    this->mbc6.romBank1A = 2;
+    this->mbc6.romBank1B = 3;
+    this->mbc6.sramBankA = 0;
+    this->mbc6.sramBankB = 1;
 
     // MBC7
-    memset(&this->mbc7, 0, sizeof(this->mbc7));
     this->mbc7.tiltX = 0x8000;
     this->mbc7.tiltY = 0x8000;
-
-    // HuC1
-    this->huc1RamMode = false;
-
-    // HuC3
-    this->huc3Mode = 0;
-    this->huc3Value = 0;
-    this->huc3Shift = 0;
-
-    // MMM01
-    this->mmm01BankSelected = false;
-    this->mmm01RomBaseBank = 0;
-
-    // CAMERA
-    this->cameraIO = false;
-    this->cameraReadyCycle = 0;
-    memset(this->cameraRegs, 0, sizeof(this->cameraRegs));
-
-    // TAMA5
-    memset(&this->tama5, 0, sizeof(this->tama5));
 
     this->mapBanks();
 }
@@ -283,36 +268,28 @@ std::istream& operator>>(std::istream& is, Cartridge& cart) {
 
     switch(cart.mbcType) {
         case MBC1:
-            is.read((char*) &cart.mbc1Mode, sizeof(cart.mbc1Mode));
+            is.read((char*) &cart.mbc1, sizeof(cart.mbc1));
             break;
         case MBC3:
-            is.read((char*) &cart.mbc3Ctrl, sizeof(cart.mbc3Ctrl));
+            is.read((char*) &cart.mbc3, sizeof(cart.mbc3));
             break;
         case MBC6:
-            is.read((char*) &cart.mbc6RomBank1A, sizeof(cart.mbc6RomBank1A));
-            is.read((char*) &cart.mbc6RomBank1B, sizeof(cart.mbc6RomBank1B));
-            is.read((char*) &cart.mbc6SramBankA, sizeof(cart.mbc6SramBankA));
-            is.read((char*) &cart.mbc6SramBankB, sizeof(cart.mbc6SramBankB));
+            is.read((char*) &cart.mbc6, sizeof(cart.mbc6));
             break;
         case MBC7:
             is.read((char*) &cart.mbc7, sizeof(cart.mbc7));
             break;
         case HUC1:
-            is.read((char*) &cart.huc1RamMode, sizeof(cart.huc1RamMode));
+            is.read((char*) &cart.huc1, sizeof(cart.huc1));
             break;
         case HUC3:
-            is.read((char*) &cart.huc3Mode, sizeof(cart.huc3Mode));
-            is.read((char*) &cart.huc3Value, sizeof(cart.huc3Value));
-            is.read((char*) &cart.huc3Shift, sizeof(cart.huc3Shift));
+            is.read((char*) &cart.huc3, sizeof(cart.huc3));
             break;
         case MMM01:
-            is.read((char*) &cart.mmm01BankSelected, sizeof(cart.mmm01BankSelected));
-            is.read((char*) &cart.mmm01RomBaseBank, sizeof(cart.mmm01RomBaseBank));
+            is.read((char*) &cart.mmm01, sizeof(cart.mmm01));
             break;
         case CAMERA:
-            is.read((char*) &cart.cameraIO, sizeof(cart.cameraIO));
-            is.read((char*) &cart.cameraReadyCycle, sizeof(cart.cameraReadyCycle));
-            is.read((char*) cart.cameraRegs, sizeof(cart.cameraRegs));
+            is.read((char*) &cart.camera, sizeof(cart.camera));
             break;
         case TAMA5:
             is.read((char*) &cart.tama5, sizeof(cart.tama5));
@@ -333,36 +310,28 @@ std::ostream& operator<<(std::ostream& os, const Cartridge& cart) {
 
     switch(cart.mbcType) {
         case MBC1:
-            os.write((char*) &cart.mbc1Mode, sizeof(cart.mbc1Mode));
+            os.write((char*) &cart.mbc1, sizeof(cart.mbc1));
             break;
         case MBC3:
-            os.write((char*) &cart.mbc3Ctrl, sizeof(cart.mbc3Ctrl));
+            os.write((char*) &cart.mbc3, sizeof(cart.mbc3));
             break;
         case MBC6:
-            os.write((char*) &cart.mbc6RomBank1A, sizeof(cart.mbc6RomBank1A));
-            os.write((char*) &cart.mbc6RomBank1B, sizeof(cart.mbc6RomBank1B));
-            os.write((char*) &cart.mbc6SramBankA, sizeof(cart.mbc6SramBankA));
-            os.write((char*) &cart.mbc6SramBankB, sizeof(cart.mbc6SramBankB));
+            os.write((char*) &cart.mbc6, sizeof(cart.mbc6));
             break;
         case MBC7:
             os.write((char*) &cart.mbc7, sizeof(cart.mbc7));
             break;
         case HUC1:
-            os.write((char*) &cart.huc1RamMode, sizeof(cart.huc1RamMode));
+            os.write((char*) &cart.huc1, sizeof(cart.huc1));
             break;
         case HUC3:
-            os.write((char*) &cart.huc3Mode, sizeof(cart.huc3Mode));
-            os.write((char*) &cart.huc3Value, sizeof(cart.huc3Value));
-            os.write((char*) &cart.huc3Shift, sizeof(cart.huc3Shift));
+            os.write((char*) &cart.huc3, sizeof(cart.huc3));
             break;
         case MMM01:
-            os.write((char*) &cart.mmm01BankSelected, sizeof(cart.mmm01BankSelected));
-            os.write((char*) &cart.mmm01RomBaseBank, sizeof(cart.mmm01RomBaseBank));
+            os.write((char*) &cart.mmm01, sizeof(cart.mmm01));
             break;
         case CAMERA:
-            os.write((char*) &cart.cameraIO, sizeof(cart.cameraIO));
-            os.write((char*) &cart.cameraReadyCycle, sizeof(cart.cameraReadyCycle));
-            os.write((char*) cart.cameraRegs, sizeof(cart.cameraRegs));
+            os.write((char*) &cart.camera, sizeof(cart.camera));
             break;
         case TAMA5:
             os.write((char*) &cart.tama5, sizeof(cart.tama5));
@@ -422,7 +391,7 @@ void Cartridge::mapRomBank1() {
     if(this->mbcType == MBC6) {
         u16 totalHalfBanks = this->totalRomBanks << 1;
 
-        u8 bank1A = this->mbc6RomBank1A & (totalHalfBanks - 1);
+        u8 bank1A = this->mbc6.romBank1A & (totalHalfBanks - 1);
         if(bank1A < totalHalfBanks) {
             u8* bankPtr = &this->rom[bank1A * HALF_ROM_BANK_SIZE];
 
@@ -437,7 +406,7 @@ void Cartridge::mapRomBank1() {
             this->gameboy->mmu.mapBankBlock(0x5, nullptr);
         }
 
-        u8 bank1B = this->mbc6RomBank1B & (totalHalfBanks - 1);
+        u8 bank1B = this->mbc6.romBank1B & (totalHalfBanks - 1);
         if(bank1B < totalHalfBanks) {
             u8* bankPtr = &this->rom[bank1B * HALF_ROM_BANK_SIZE];
 
@@ -478,7 +447,7 @@ void Cartridge::mapSramBank() {
         if(this->mbcType == MBC6) {
             u16 totalHalfBanks = this->totalRamBanks << 1;
 
-            u8 bankA = this->mbc6SramBankA & (totalHalfBanks - 1);
+            u8 bankA = this->mbc6.sramBankA & (totalHalfBanks - 1);
             if(bankA < totalHalfBanks) {
                 u8* bankPtr = &this->sram[bankA * HALF_SRAM_BANK_SIZE];
 
@@ -491,7 +460,7 @@ void Cartridge::mapSramBank() {
                 this->gameboy->mmu.mapBankBlock(0xA, nullptr);
             }
 
-            u8 bankB = this->mbc6SramBankB & (totalHalfBanks - 1);
+            u8 bankB = this->mbc6.sramBankB & (totalHalfBanks - 1);
             if(bankB < totalHalfBanks) {
                 u8* bankPtr = &this->sram[bankB * HALF_SRAM_BANK_SIZE];
 
@@ -548,7 +517,7 @@ u8 Cartridge::m3r(u16 addr) {
             case 0xB:
                 return (u8) (this->rtcClock.days & 0xFF);
             case 0xC:
-                return this->mbc3Ctrl;
+                return this->mbc3.ctrl;
             default: // Not an RTC register
                 return this->readSram((u16) (addr & SRAM_BANK_MASK));
         }
@@ -579,11 +548,11 @@ u8 Cartridge::m7r(u16 addr) {
 
 /* HuC3 */
 u8 Cartridge::h3r(u16 addr) {
-    switch(this->huc3Mode) {
+    switch(this->huc3.mode) {
         case 0xA:
             return this->readSram((u16) (addr & SRAM_BANK_MASK));
         case 0xC:
-            return this->huc3Value;
+            return this->huc3.value;
         case 0xB:
         case 0xD:
             /* Return 1 as a fixed value, needed for some games to
@@ -653,10 +622,10 @@ u8 Cartridge::t5r(u16 addr) {
 
 /* CAMERA */
 u8 Cartridge::camr(u16 addr) {
-    if(this->cameraIO) {
+    if(this->camera.io) {
         u8 reg = (u8) (addr & 0x7F);
         if(reg == 0) {
-            return this->cameraRegs[reg];
+            return this->camera.regs[reg];
         }
 
         return 0;
@@ -696,7 +665,7 @@ void Cartridge::m1w(u16 addr, u8 val) {
         case 0x2: /* 4000 - 5FFF */
             val &= 0x03;
 
-            if(this->mbc1Mode) { /* RAM mode */
+            if(this->mbc1.mode) { /* RAM mode */
                 if(this->multicart) {
                     // Set ROM bank 0.
                     this->romBank0 = val << 4;
@@ -714,9 +683,9 @@ void Cartridge::m1w(u16 addr, u8 val) {
 
             break;
         case 0x3: /* 6000 - 7FFF */
-            this->mbc1Mode = (bool) (val & 1);
+            this->mbc1.mode = (bool) (val & 1);
 
-            if(this->mbc1Mode) {
+            if(this->mbc1.mode) {
                 if(this->multicart) {
                     // Map ROM bank 0 from upper bits of ROM bank 1.
                     this->romBank0 = this->romBank1 & 0x30;
@@ -794,11 +763,11 @@ void Cartridge::m3w(u16 addr, u8 val) {
                 this->latchClock();
 
                 if(this->rtcClock.days > 0x1FF) {
-                    this->mbc3Ctrl |= 0x80;
+                    this->mbc3.ctrl |= 0x80;
                     this->rtcClock.days &= 0x1FF;
                 }
 
-                this->mbc3Ctrl = (u8) ((this->mbc3Ctrl & 0xFE) | ((this->rtcClock.days >> 8) & 1));
+                this->mbc3.ctrl = (u8) ((this->mbc3.ctrl & 0xFE) | ((this->rtcClock.days >> 8) & 1));
             }
 
             break;
@@ -844,11 +813,11 @@ void Cartridge::m6w(u16 addr, u8 val) {
             this->mapSramBank();
             break;
         case 0x1: /* 0400 - 07FF */
-            this->mbc6SramBankA = val;
+            this->mbc6.sramBankA = val;
             this->mapSramBank();
             break;
         case 0x2: /* 0800 - 0BFF */
-            this->mbc6SramBankB = val;
+            this->mbc6.sramBankB = val;
             this->mapSramBank();
             break;
         case 0x3: /* 0C00 - 0FFF */
@@ -863,7 +832,7 @@ void Cartridge::m6w(u16 addr, u8 val) {
         case 0x8: /* 2000 - 27FF */
         case 0x9:
             // TODO: Additional behavior.
-            this->mbc6RomBank1A = val;
+            this->mbc6.romBank1A = val;
             this->mapRomBank1();
             break;
         case 0xA: /* 2800 - 2FFF */
@@ -873,7 +842,7 @@ void Cartridge::m6w(u16 addr, u8 val) {
         case 0xC: /* 3000 - 37FF */
         case 0xD:
             // TODO: Additional behavior.
-            this->mbc6RomBank1B = val;
+            this->mbc6.romBank1B = val;
             this->mapRomBank1();
             break;
         case 0xE: /* 3800 - 3FFF */
@@ -917,31 +886,31 @@ void Cartridge::m7w(u16 addr, u8 val) {
 void Cartridge::mmm01w(u16 addr, u8 val) {
     switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-            if(this->mmm01BankSelected) {
+            if(this->mmm01.bankSelected) {
                 this->sramEnabled = (val & 0xF) == 0xA;
                 this->mapSramBank();
             } else {
-                this->mmm01BankSelected = true;
+                this->mmm01.bankSelected = true;
 
-                this->romBank0 = this->mmm01RomBaseBank;
+                this->romBank0 = this->mmm01.romBaseBank;
                 this->mapRomBank0();
 
-                this->romBank1 = this->mmm01RomBaseBank + 1;
+                this->romBank1 = this->mmm01.romBaseBank + 1;
                 this->mapRomBank1();
             }
 
             break;
         case 0x1: /* 2000 - 3FFF */
-            if(this->mmm01BankSelected) {
-                this->romBank1 = this->mmm01RomBaseBank + (val ? val : 1);
+            if(this->mmm01.bankSelected) {
+                this->romBank1 = this->mmm01.romBaseBank + (val ? val : 1);
             this->mapRomBank1();
             } else {
-                this->mmm01RomBaseBank = (u8) (((val & 0x3F) & (this->totalRomBanks - 1)) + 2);
+                this->mmm01.romBaseBank = (u8) (((val & 0x3F) & (this->totalRomBanks - 1)) + 2);
             }
 
             break;
         case 0x2: /* 4000 - 5FFF */
-            if(this->mmm01BankSelected) {
+            if(this->mmm01.bankSelected) {
                 this->sramBank = val;
                 this->mapSramBank();
             }
@@ -965,7 +934,7 @@ void Cartridge::h1w(u16 addr, u8 val) {
             break;
         case 0x2: /* 4000 - 5FFF */
             val &= 3;
-            if(this->huc1RamMode) {
+            if(this->huc1.ramMode) {
                 this->sramBank = val;
                 this->mapSramBank();
             } else {
@@ -975,7 +944,7 @@ void Cartridge::h1w(u16 addr, u8 val) {
 
             break;
         case 0x3: /* 6000 - 7FFF */
-            this->huc1RamMode = (bool) (val & 1);
+            this->huc1.ramMode = (bool) (val & 1);
             break;
         default:
             break;
@@ -986,7 +955,7 @@ void Cartridge::h1w(u16 addr, u8 val) {
 void Cartridge::h3w(u16 addr, u8 val) {
     switch(addr >> 13) {
         case 0x0: /* 0000 - 1FFF */
-            this->huc3Mode = val;
+            this->huc3.mode = val;
             break;
         case 0x1: /* 2000 - 3FFF */
             this->romBank1 = val ? val : 1;
@@ -1013,8 +982,8 @@ void Cartridge::camw(u16 addr, u8 val) {
             this->mapRomBank1();
             break;
         case 0x2: /* 4000 - 5FFF */
-            this->cameraIO = (val & 0x10) != 0;
-            if(!this->cameraIO) {
+            this->camera.io = (val & 0x10) != 0;
+            if(!this->camera.io) {
                 this->sramBank = val & 0xF;
                 this->mapSramBank();
             }
@@ -1052,7 +1021,7 @@ void Cartridge::m3ws(u16 addr, u8 val) {
                 break;
             case 0xC:
                 this->rtcClock.days = ((val & 1) << 8) | (this->rtcClock.days & 0xFF);
-                this->mbc3Ctrl = val;
+                this->mbc3.ctrl = val;
                 break;
             default: // Not an RTC register
                 this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
@@ -1237,50 +1206,50 @@ void Cartridge::m7ws(u16 addr, u8 val) {
 
 /* MMM01 */
 void Cartridge::mmm01ws(u16 addr, u8 val) {
-    if(this->mmm01BankSelected && this->sramEnabled) {
+    if(this->mmm01.bankSelected && this->sramEnabled) {
         this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
     }
 }
 
 /* HuC3 */
 void Cartridge::h3ws(u16 addr, u8 val) {
-    switch(this->huc3Mode) {
+    switch(this->huc3.mode) {
         case 0xA:
             this->writeSram((u16) (addr & SRAM_BANK_MASK), val);
             break;
         case 0xB:
             switch(val & 0xF0) {
                 case 0x10: /* Read clock */
-                    if(this->huc3Shift > 24) {
+                    if(this->huc3.shift > 24) {
                         break;
                     }
 
-                    switch(this->huc3Shift) {
+                    switch(this->huc3.shift) {
                         case 0:
                         case 4:
                         case 8: /* Minutes */
-                            this->huc3Value = (u8) ((this->rtcClock.minutes >> this->huc3Shift) & 0xF);
+                            this->huc3.value = (u8) ((this->rtcClock.minutes >> this->huc3.shift) & 0xF);
                             break;
                         case 12:
                         case 16:
                         case 20: /* Days */
-                            this->huc3Value = (u8) ((this->rtcClock.days >> (this->huc3Shift - 12)) & 0xF);
+                            this->huc3.value = (u8) ((this->rtcClock.days >> (this->huc3.shift - 12)) & 0xF);
                             break;
                         case 24: /* Year */
-                            this->huc3Value = (u8) (this->rtcClock.years & 0xF);
+                            this->huc3.value = (u8) (this->rtcClock.years & 0xF);
                             break;
                         default:
                             break;
                     }
 
-                    this->huc3Shift += 4;
+                    this->huc3.shift += 4;
                     break;
                 case 0x40:
                     switch(val & 0xF) {
                         case 0:
                         case 4:
                         case 7:
-                            this->huc3Shift = 0;
+                            this->huc3.shift = 0;
                             break;
                         default:
                             break;
@@ -1291,7 +1260,7 @@ void Cartridge::h3ws(u16 addr, u8 val) {
                 case 0x50:
                     break;
                 case 0x60:
-                    this->huc3Value = 1;
+                    this->huc3.value = 1;
                     break;
                 default:
                     if(this->gameboy->settings.printDebug != nullptr) {
@@ -1356,12 +1325,12 @@ void Cartridge::t5ws(u16 addr, u8 val) {
 
 /* CAMERA */
 void Cartridge::camws(u16 addr, u8 val) {
-    if(this->cameraIO) {
+    if(this->camera.io) {
         u8 reg = (u8) (addr & 0x7F);
         if(reg < 0x36) {
-            this->cameraRegs[reg] = val;
+            this->camera.regs[reg] = val;
             if(reg == 0) {
-                this->cameraRegs[reg] &= 0x7;
+                this->camera.regs[reg] &= 0x7;
 
                 if(val & 0x1) {
                     this->camTakePicture();
@@ -1377,9 +1346,9 @@ void Cartridge::camws(u16 addr, u8 val) {
 
 /* CAMERA */
 void Cartridge::camu() {
-    if(this->cameraReadyCycle != 0 && this->gameboy->cpu.getCycle() >= this->cameraReadyCycle) {
-        this->cameraRegs[0] &= ~0x1;
-        this->cameraReadyCycle = 0;
+    if(this->camera.readyCycle != 0 && this->gameboy->cpu.getCycle() >= this->camera.readyCycle) {
+        this->camera.regs[0] &= ~0x1;
+        this->camera.readyCycle = 0;
     }
 }
 
@@ -1398,17 +1367,17 @@ void Cartridge::camu() {
 static const float edgeRatioLUT[8] = {0.50, 0.75, 1.00, 1.25, 2.00, 3.00, 4.00, 5.00};
 
 void Cartridge::camTakePicture() {
-    u32 pBits = (u32) (((this->cameraRegs[0] >> 1) & 3) != 0);
-    u32 mBits = (u32) ((this->cameraRegs[0] >> 1) & 2);
-    u32 nBit = (u32) ((this->cameraRegs[1] & 0x80) >> 7);
-    u32 vhBits = (u32) ((this->cameraRegs[1] & 0x60) >> 5);
-    u32 exposureBits = this->cameraRegs[3] | (this->cameraRegs[2] << 8);
-    u32 iBit = (u32) ((this->cameraRegs[4] & 0x08) >> 3);
-    float edgeAlpha = edgeRatioLUT[(this->cameraRegs[4] & 0x70) >> 4];
-    u32 e3Bit = (u32) ((this->cameraRegs[4] & 0x80) >> 7);
+    u32 pBits = (u32) (((this->camera.regs[0] >> 1) & 3) != 0);
+    u32 mBits = (u32) ((this->camera.regs[0] >> 1) & 2);
+    u32 nBit = (u32) ((this->camera.regs[1] & 0x80) >> 7);
+    u32 vhBits = (u32) ((this->camera.regs[1] & 0x60) >> 5);
+    u32 exposureBits = this->camera.regs[3] | (this->camera.regs[2] << 8);
+    u32 iBit = (u32) ((this->camera.regs[4] & 0x08) >> 3);
+    float edgeAlpha = edgeRatioLUT[(this->camera.regs[4] & 0x70) >> 4];
+    u32 e3Bit = (u32) ((this->camera.regs[4] & 0x80) >> 7);
 
-    this->cameraReadyCycle = this->gameboy->cpu.getCycle() + exposureBits * 64 + (nBit ? 0 : 2048) + 129784;
-    this->gameboy->cpu.setEventCycle(this->cameraReadyCycle);
+    this->camera.readyCycle = this->gameboy->cpu.getCycle() + exposureBits * 64 + (nBit ? 0 : 2048) + 129784;
+    this->gameboy->cpu.setEventCycle(this->camera.readyCycle);
 
     if(this->gameboy->settings.getCameraImage == nullptr) {
         return;
@@ -1516,11 +1485,11 @@ void Cartridge::camTakePicture() {
         for(int x = 0; x < CAMERA_SENSOR_WIDTH; x++) {
             int base = 6 + ((y & 3) * 4 + (x & 3)) * 3;
             u32 value = (u32) (line[x] + 128);
-            if(value < this->cameraRegs[base + 0]) {
+            if(value < this->camera.regs[base + 0]) {
                 processedLine[x] = 0x00;
-            } else if(value < this->cameraRegs[base + 1]) {
+            } else if(value < this->camera.regs[base + 1]) {
                 processedLine[x] = 0x40;
-            } else if(value < this->cameraRegs[base + 2]) {
+            } else if(value < this->camera.regs[base + 2]) {
                 processedLine[x] = 0x80;
             } else {
                 processedLine[x] = 0xC0;
