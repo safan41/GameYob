@@ -129,6 +129,7 @@ UIKey uiReadKey() {
         case '\n':
             return UI_KEY_A;
         case KEY_BACKSPACE:
+        case 127:
             return UI_KEY_B;
         case KEY_UP:
             return UI_KEY_UP;

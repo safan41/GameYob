@@ -495,6 +495,7 @@ static time_t lastPrintTime;
 static int fps;
 static bool fastForward;
 
+static std::string romDir;
 static std::string romName;
 
 static u32 numPrinted;
@@ -544,28 +545,108 @@ static u8 mgrGetOption(GameboyOption opt) {
     }
 }
 
-static void mgrPrintImage(bool appending, u8* buf, int size, u8 palette) {
+static std::string mgrGetSavePath() {
+    std::stringstream stream;
+
+    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_SAVE_PATH);
+    if(!basePath.empty()) {
+        stream << basePath;
+    } else {
+        stream << romDir;
+    }
+
+    stream << "/" << romName << ".sav";
+    return stream.str();
+}
+
+static std::string mgrGetStatePath(int stateNum) {
+    std::stringstream stream;
+
+    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_SAVE_STATE_PATH);
+    if(!basePath.empty()) {
+        stream << basePath;
+    } else {
+        stream << romDir;
+    }
+
+    stream << "/" << romName;
+    if(stateNum == -1) {
+        stream << ".yss";
+    } else {
+        stream << ".ys" << stateNum;
+    }
+
+    return stream.str();
+}
+
+static std::string mgrGetCheatPath() {
+    std::stringstream stream;
+
+    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_CHEATS_PATH);
+    if(!basePath.empty()) {
+        stream << basePath;
+    } else {
+        stream << romDir;
+    }
+
+    stream << "/" << romName << ".cht";
+    return stream.str();
+}
+
+static std::string mgrGetBorderBasePath() {
+    std::stringstream stream;
+
+    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_BORDER_PATH);
+    if(!basePath.empty()) {
+        stream << basePath;
+    } else {
+        stream << romDir;
+    }
+
+    stream << "/" << romName;
+    return stream.str();
+}
+
+static std::string mgrGetPrintPath(bool& appending) {
+    std::stringstream baseStream;
+
+    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_PRINT_PATH);
+    if(!basePath.empty()) {
+        baseStream << basePath;
+    } else {
+        baseStream << romDir;
+    }
+
+    baseStream << "/" << romName << "-";
+
     // Find the first available "print number".
-    char filename[300];
+    const std::string baseFile = baseStream.str();
     while(true) {
-        snprintf(filename, 300, "%s-%" PRIu32 ".bmp", mgrGetRomName().c_str(), numPrinted);
+        std::stringstream finalStream;
+        finalStream << baseFile << numPrinted << ".bmp";
+
+        const std::string finalFile = finalStream.str();
 
         // If appending, the last file written to is already selected.
         // Else, if the file doesn't exist, we're done searching.
-        if(appending || access(filename, R_OK) != 0) {
-            if(appending && access(filename, R_OK) != 0) {
-                // This is a failsafe, this shouldn't happen
+        bool exists = access(finalFile.c_str(), R_OK) == 0;
+        if(appending || !exists) {
+            if(appending && !exists) {
+                // This is a failsafe, this shouldn't happen.
                 appending = false;
-                mgrPrintDebug("The image to be appended to doesn't exist: %s\n", filename);
-                continue;
-            } else {
-                break;
+                mgrPrintDebug("The image to be appended to doesn't exist: %s\n", finalFile.c_str());
             }
+
+            break;
         }
 
         numPrinted++;
     }
 
+    return baseStream.str();
+}
+
+static void mgrPrintImage(bool appending, u8* buf, int size, u8 palette) {
     int width = PRINTER_WIDTH;
 
     // In case of error, size must be rounded off to the nearest 16 vertical pixels.
@@ -635,8 +716,10 @@ static void mgrPrintImage(bool appending, u8* buf, int size, u8 palette) {
         }
     }
 
+    const std::string path = mgrGetPrintPath(appending);
+
     if(appending) {
-        std::fstream stream(filename, std::fstream::in | std::fstream::out | std::fstream::binary | std::fstream::ate);
+        std::fstream stream(path, std::fstream::in | std::fstream::out | std::fstream::binary | std::fstream::ate);
         s64 end = stream.tellg();
 
         int temp = 0;
@@ -666,7 +749,7 @@ static void mgrPrintImage(bool appending, u8* buf, int size, u8 palette) {
 
         stream.close();
     } else { // Not appending; making a file from scratch
-        std::fstream stream(filename, std::fstream::out | std::fstream::binary);
+        std::fstream stream(path, std::fstream::out | std::fstream::binary);
 
         *(u32*) (bmpHeader + 0x02) = sizeof(bmpHeader) + pixelArraySize;
         *(u32*) (bmpHeader + 0x22) = (u32) pixelArraySize;
@@ -714,6 +797,7 @@ void mgrInit() {
     fastForward = false;
     fps = 0;
 
+    romDir = "";
     romName = "";
 
     autoFireCounterA = 0;
@@ -774,10 +858,6 @@ Cartridge* mgrGetRom() {
     return gameboy->cartridge;
 }
 
-std::string mgrGetRomName() {
-    return romName;
-}
-
 static void mgrPowerOn(const std::string& romFile) {
     if(gameboy == nullptr) {
         return;
@@ -802,11 +882,19 @@ static void mgrPowerOn(const std::string& romFile) {
             romName = romFile;
         }
 
+        std::string::size_type slash = romName.find_last_of('/');
+        if(slash != std::string::npos) {
+            romDir = romName.substr(0, slash + 1);
+            romName = romName.substr(slash + 1);
+        } else {
+            romDir = "/";
+        }
+
         gameboy->cartridge = new Cartridge(romStream, romSize);
 
         romStream.close();
 
-        std::ifstream saveStream(romName + ".sav", std::ios::binary);
+        std::ifstream saveStream(mgrGetSavePath(), std::ios::binary);
         if(saveStream.is_open()) {
             gameboy->cartridge->load(saveStream);
             saveStream.close();
@@ -814,7 +902,7 @@ static void mgrPowerOn(const std::string& romFile) {
             mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         }
 
-        cheatEngine->loadCheats(romName + ".cht");
+        cheatEngine->loadCheats(mgrGetCheatPath());
     }
 
     mgrReset();
@@ -830,7 +918,7 @@ static void mgrWriteSave() {
         return;
     }
 
-    std::ofstream stream(romName + ".sav", std::ios::binary);
+    std::ofstream stream(mgrGetSavePath(), std::ios::binary);
     if(!stream.is_open()) {
         mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         return;
@@ -847,7 +935,7 @@ void mgrPowerOff(bool save) {
                 mgrWriteSave();
             }
 
-            cheatEngine->saveCheats(romName + ".cht");
+            cheatEngine->saveCheats(mgrGetCheatPath());
 
             Cartridge* cart = gameboy->cartridge;
             gameboy->cartridge = nullptr;
@@ -857,6 +945,7 @@ void mgrPowerOff(bool save) {
         gameboy->powerOff();
     }
 
+    romDir = "";
     romName = "";
 
     mgrRefreshBorder();
@@ -865,23 +954,12 @@ void mgrPowerOff(bool save) {
     gfxDrawScreen();
 }
 
-const std::string mgrGetStateName(int stateNum) {
-    std::stringstream nameStream;
-    if(stateNum == -1) {
-        nameStream << romName << ".yss";
-    } else {
-        nameStream << romName << ".ys" << stateNum;
-    }
-
-    return nameStream.str();
-}
-
 bool mgrStateExists(int stateNum) {
     if(gameboy == nullptr || gameboy->cartridge == nullptr) {
         return false;
     }
 
-    std::ifstream stream(mgrGetStateName(stateNum), std::ios::binary);
+    std::ifstream stream(mgrGetStatePath(stateNum), std::ios::binary);
     if(stream.is_open()) {
         stream.close();
         return true;
@@ -895,7 +973,7 @@ bool mgrLoadState(int stateNum) {
         return false;
     }
 
-    std::ifstream stream(mgrGetStateName(stateNum), std::ios::binary);
+    std::ifstream stream(mgrGetStatePath(stateNum), std::ios::binary);
     if(!stream.is_open()) {
         mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
         return false;
@@ -913,7 +991,7 @@ bool mgrSaveState(int stateNum) {
         return false;
     }
 
-    std::ofstream stream(mgrGetStateName(stateNum), std::ios::binary);
+    std::ofstream stream(mgrGetStatePath(stateNum), std::ios::binary);
     if(!stream.is_open()) {
         mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
         return false;
@@ -929,7 +1007,7 @@ void mgrDeleteState(int stateNum) {
         return;
     }
 
-    remove(mgrGetStateName(stateNum).c_str());
+    remove(mgrGetStatePath(stateNum).c_str());
 }
 
 bool mgrCheatsExist() {
@@ -1072,9 +1150,11 @@ void mgrRefreshBorder() {
     if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON && gameboy != nullptr && gameboy->cartridge != nullptr) {
         std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
 
+        const std::string basePath = mgrGetBorderBasePath();
+
         bool foundRomSpecific = false;
         for(const std::string& extension : supportedExtensions) {
-            if(mgrTryBorderFile(romName + "." + extension)) {
+            if(mgrTryBorderFile(basePath + "." + extension)) {
                 foundRomSpecific = true;
                 break;
             }
@@ -1159,7 +1239,7 @@ void mgrRun() {
             } else {
                 systemRequestExit();
             }
-        }, romPath, {"sgb", "gbc", "cgb", "gb"}));
+        }, romPath, {"sgb", "gbc", "cgb", "gb"}, false));
     }
 
     menuUpdate();

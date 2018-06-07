@@ -9,7 +9,7 @@
 
 class FileChooser : public Menu {
 public:
-    FileChooser(std::function<void(bool, const std::string&)> finished, const std::string& directory, const std::vector<std::string>& extensions);
+    FileChooser(std::function<void(bool, const std::string&)> finished, const std::string& directory, const std::vector<std::string>& extensions, bool canClear);
 
     bool processInput(UIKey key, u32 width, u32 height);
     void draw(u32 width, u32 height);
@@ -30,6 +30,7 @@ private:
     std::function<void(bool, const std::string&)> finished;
     std::string directory;
     std::vector<std::string> extensions;
+    bool canClear;
 
     std::vector<FileEntry> files;
 

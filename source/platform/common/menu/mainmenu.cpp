@@ -384,7 +384,7 @@ void MainMenu::doItemAction(u8 menu, u8 item) {
                 if(chosen) {
                     configSetPath(group, pathItem, path);
                 }
-            }, configGetPath(group, pathItem), configGetPathExtensions(group, pathItem)));
+            }, configGetPath(group, pathItem), configGetPathExtensions(group, pathItem), true));
         }
     }
 }

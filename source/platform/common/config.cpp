@@ -99,6 +99,36 @@ static ConfigGroup gameYob = {
                         {},
                         "/",
                         nullptr
+                },
+                {
+                        "Save Path",
+                        {},
+                        "",
+                        nullptr
+                },
+                {
+                        "Save State Path",
+                        {},
+                        "",
+                        nullptr
+                },
+                {
+                        "Cheats Path",
+                        {},
+                        "",
+                        nullptr
+                },
+                {
+                        "Border Path",
+                        {},
+                        "",
+                        nullptr
+                },
+                {
+                        "Print Path",
+                        {},
+                        "",
+                        nullptr
                 }
         }
 };

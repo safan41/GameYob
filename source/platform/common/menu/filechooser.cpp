@@ -2,11 +2,14 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <platform/common/menu/filechooser.h>
 
 #include "platform/common/menu/filechooser.h"
+#include "platform/common/config.h"
+#include "platform/common/manager.h"
 #include "platform/input.h"
 #include "platform/system.h"
 #include "platform/ui.h"
@@ -16,10 +19,11 @@
 #define FLAG_ROM        4
 #define FLAG_SPECIAL    8
 
-FileChooser::FileChooser(std::function<void(bool, const std::string&)> finished, const std::string& directory, const std::vector<std::string>& extensions) {
+FileChooser::FileChooser(std::function<void(bool, const std::string&)> finished, const std::string& directory, const std::vector<std::string>& extensions, bool canClear) {
     this->finished = finished;
     this->directory = directory;
     this->extensions = extensions;
+    this->canClear = canClear;
 
     // If the path is to a file, open the parent directory.
     DIR* dir = nullptr;
@@ -46,6 +50,9 @@ FileChooser::FileChooser(std::function<void(bool, const std::string&)> finished,
 
 bool FileChooser::processInput(UIKey key, u32 width, u32 height) {
     filesPerPage = height - 1;
+    if(canClear) {
+        filesPerPage--;
+    }
 
     if(key == UI_KEY_A) {
         FileEntry& entry = files[selection];
@@ -82,13 +89,18 @@ bool FileChooser::processInput(UIKey key, u32 width, u32 height) {
             }
 
             menuPop();
-            return false;
+        } else {
+            navigateBack();
+            refreshContents();
+
+            return true;
+        }
+    } else if(key == UI_KEY_X) {
+        if(finished != nullptr) {
+            finished(true, "");
         }
 
-        navigateBack();
-        refreshContents();
-
-        return true;
+        menuPop();
     } else if(key == UI_KEY_UP) {
         if(selection > 0) {
             selection--;
@@ -183,6 +195,11 @@ void FileChooser::draw(u32 width, u32 height) {
             uiSetLineHighlighted(false);
         }
     }
+
+    if(canClear) {
+        uiSetLine(height - 2);
+        uiPrint("Press X to clear the current setting.");
+    }
 }
 
 void FileChooser::updateScrollDown() {
@@ -247,8 +264,6 @@ void FileChooser::refreshContents() {
 
     DIR* dir = opendir(directory.c_str());
     if(dir != nullptr) {
-        std::vector<std::string> unmatchedStates;
-
         // Read file list
         dirent* entry;
         while((entry = readdir(dir)) != nullptr) {
@@ -279,46 +294,27 @@ void FileChooser::refreshContents() {
                 } else if(extension == "cgb" || extension == "gbc" || extension == "gb" || extension == "sgb") {
                     flags |= FLAG_ROM;
 
-                    // Check for suspend state
-                    if(!unmatchedStates.empty()) {
-                        for(u32 i = 0; i < unmatchedStates.size(); i++) {
-                            if(name == unmatchedStates[i]) {
-                                flags |= FLAG_SUSPENDED;
+                    std::stringstream stateStream;
 
-                                unmatchedStates.erase(unmatchedStates.begin() + i);
-                                break;
-                            }
-                        }
+                    const std::string basePath = configGetPath(GROUP_GAMEYOB, GAMEYOB_SAVE_STATE_PATH);
+                    if(!basePath.empty()) {
+                        stateStream << basePath << "/";
+                    } else {
+                        stateStream << directory;
+                    }
+
+                    stateStream << name << ".yss";
+
+                    const std::string stateFile = stateStream.str();
+                    std::ifstream stream(stateFile, std::ios::binary);
+                    if(stream.is_open()) {
+                        stream.close();
+
+                        flags |= FLAG_SUSPENDED;
                     }
                 }
 
                 files.push_back({fullName, flags});
-            } else if(extension == "yss" && !(entry->d_type & DT_DIR)) {
-                bool matched = false;
-
-                for(FileEntry& otherEntry : files) {
-                    if(otherEntry.flags & FLAG_ROM) {
-                        std::string otherName;
-
-                        std::string::size_type otherDotPos = otherEntry.name.find('.');
-                        if(otherDotPos != std::string::npos) {
-                            otherName = otherEntry.name.substr(0, otherDotPos);
-                        } else {
-                            otherName = otherEntry.name;
-                        }
-
-                        if(otherName == name) {
-                            otherEntry.flags |= FLAG_SUSPENDED;
-
-                            matched = true;
-                            break;
-                        }
-                    }
-                }
-
-                if(!matched) {
-                    unmatchedStates.push_back(name);
-                }
             }
         }
 
