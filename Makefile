@@ -63,7 +63,7 @@ ifeq ($(TARGET),SWITCH)
 
     BUILD_FLAGS += -DBACKEND_SWITCH
 
-    ICON := meta/icon_switch.png
+    ICON := meta/icon_switch.jpg
 endif
 
 # INTERNAL #

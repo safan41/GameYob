@@ -80,7 +80,7 @@ bool Gameboy::loadState(std::istream& data) {
     u8 version;
     data.read((char*) &version, sizeof(version));
 
-    if(version < 12 || version > STATE_VERSION) {
+    if(version < 13 || version > STATE_VERSION) {
         return false;
     }
 
