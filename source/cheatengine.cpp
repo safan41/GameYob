@@ -22,7 +22,7 @@ void CheatEngine::update() {
         if(cheat.enabled) {
             for(const CheatLine& line : cheat.lines) {
                 if(line.type == CHEAT_TYPE_GAMESHARK) {
-                    u8 oldSvbk = gameboy->mmu.read(SVBK);
+                    u8 oldSvbk = this->gameboy->mmu.read(SVBK);
                     switch(line.bank & 0xF0) {
                         case 0x00:
                             this->gameboy->mmu.write(line.address, line.data);
