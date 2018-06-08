@@ -225,7 +225,7 @@ void MainMenu::draw(u32 width, u32 height) {
     }
 
     if(!message.empty()) {
-        uiSetLine(height - 2);
+        uiSetLine(height - 1);
         uiAdvanceCursor(width - message.length());
         uiPrint("%s", message.c_str());
 
@@ -244,7 +244,7 @@ void MainMenu::printMessage(const std::string& m) {
         message = m;
     }
 
-    uiSetLine(height - 2);
+    uiSetLine(height - 1);
     uiAdvanceCursor(width - message.length());
     uiPrint("%s", message.c_str());
 

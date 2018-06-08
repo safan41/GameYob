@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include "platform/common/menu/cheatmenu.h"
 #include "platform/common/menu/menu.h"
 #include "platform/common/cheatengine.h"
@@ -72,21 +74,27 @@ void CheatsMenu::draw(u32 width, u32 height) {
     u32 numPages = numCheats > 0 ? (numCheats - 1) / cheatsPerPage + 1 : 0;
     u32 page = selection / cheatsPerPage;
 
-    uiAdvanceCursor(10);
-    uiPrint("Cheat Menu      %" PRIu32 "/%" PRIu32 "\n\n", numPages > 0 ? page + 1 : 0, numPages);
+    std::stringstream titleStream;
+    titleStream << "Cheats - Page " << (numPages > 0 ? page + 1 : 0) << "/" << numPages;
+    const std::string title = titleStream.str();
+
+    uiAdvanceCursor((width - 1 - title.length()) / 2);
+    uiPrint("%s\n\n", title.c_str());
     for(u32 i = page * cheatsPerPage; i < numCheats && i < (page + 1) * cheatsPerPage; i++) {
         if(selection == i) {
             uiSetLineHighlighted(true);
         }
 
         std::string name = cheatEngine->getCheatName(i);
-        if(name.length() > 25) {
-            name = name.substr(0, 25);
+
+        u32 maxNameLength = width - 8;
+        if(name.length() > maxNameLength) {
+            name = name.substr(0, maxNameLength);
         }
 
         uiPrint("%s", name.c_str());
 
-        uiAdvanceCursor(25 - name.length());
+        uiAdvanceCursor(maxNameLength - name.length());
 
         if(cheatEngine->isCheatEnabled(i)) {
             if(selection == i) {

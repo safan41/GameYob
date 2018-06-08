@@ -197,7 +197,7 @@ void FileChooser::draw(u32 width, u32 height) {
     }
 
     if(canClear) {
-        uiSetLine(height - 2);
+        uiSetLine(height - 1);
         uiPrint("Press X to clear the current setting.");
     }
 }

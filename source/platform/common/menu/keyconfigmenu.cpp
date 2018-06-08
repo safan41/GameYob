@@ -19,6 +19,7 @@ bool KeyConfigMenu::processInput(UIKey key, u32 width, u32 height) {
         std::stringstream name;
         name << "Custom " << configGetKeyConfigCount();
         configAddKeyConfig(name.str());
+        configSetSelectedKeyConfig(configGetKeyConfigCount() - 1);
 
         option = -1;
         cursor = -1;
@@ -163,7 +164,7 @@ void KeyConfigMenu::draw(u32 width, u32 height) {
         uiPrint("%s\n\n", config->name.c_str());
     }
 
-    uiAdvanceCursor(14);
+    uiAdvanceCursor(width / 2 - 7);
     uiPrint("Button   Function\n\n");
 
     u32 keyCount = inputGetKeyCount();
@@ -178,11 +179,13 @@ void KeyConfigMenu::draw(u32 width, u32 height) {
         }
 
         std::string keyName = inputGetKeyName(i);
-        if(keyName.length() > 18) {
-            keyName = keyName.substr(0, 18);
+
+        u32 maxKeyNameLength = width / 2 - 3;
+        if(keyName.length() > maxKeyNameLength) {
+            keyName = keyName.substr(0, maxKeyNameLength);
         }
 
-        uiAdvanceCursor(18 - keyName.length());
+        uiAdvanceCursor(maxKeyNameLength - keyName.length());
 
         if(option == (int) i) {
             uiSetLineHighlighted(true);
