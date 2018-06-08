@@ -49,11 +49,6 @@ FileChooser::FileChooser(std::function<void(bool, const std::string&)> finished,
 }
 
 bool FileChooser::processInput(UIKey key, u32 width, u32 height) {
-    filesPerPage = height - 1;
-    if(canClear) {
-        filesPerPage--;
-    }
-
     if(key == UI_KEY_A) {
         FileEntry& entry = files[selection];
 
@@ -140,6 +135,11 @@ bool FileChooser::processInput(UIKey key, u32 width, u32 height) {
 }
 
 void FileChooser::draw(u32 width, u32 height) {
+    filesPerPage = height - 1;
+    if(canClear) {
+        filesPerPage--;
+    }
+
     std::string currDirName;
     if(currDirName.length() > width) {
         currDirName = directory.substr(0, width);

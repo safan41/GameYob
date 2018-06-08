@@ -141,4 +141,14 @@ UIKey uiReadKey() {
     return UI_KEY_NONE;
 }
 
+// TODO: Eventual software keyboard support, once supported by libnx.
+
+bool uiIsStringInputSupported() {
+    return false;
+}
+
+bool uiInputString(std::string& out, size_t maxLength, const std::string& hint) {
+    return false;
+}
+
 #endif

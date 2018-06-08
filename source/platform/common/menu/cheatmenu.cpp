@@ -8,38 +8,53 @@ bool CheatsMenu::processInput(UIKey key, u32 width, u32 height) {
     CheatEngine* cheatEngine = mgrGetCheatEngine();
     u32 numCheats = cheatEngine->getNumCheats();
 
-    if(key == UI_KEY_UP) {
-        if(selection > 0) {
-            selection--;
+    if(numCheats > 0) {
+        if(key == UI_KEY_UP) {
+            if(selection > 0) {
+                selection--;
+
+                return true;
+            }
+        } else if(key == UI_KEY_DOWN) {
+            if(selection < numCheats - 1) {
+                selection++;
+
+                return true;
+            }
+        } else if(key == UI_KEY_RIGHT || key == UI_KEY_LEFT) {
+            cheatEngine->toggleCheat(selection, !cheatEngine->isCheatEnabled(selection));
+
+            return true;
+        } else if(key == UI_KEY_R) {
+            selection += cheatsPerPage;
+            if(selection >= numCheats) {
+                selection = 0;
+            }
+
+            return true;
+        } else if(key == UI_KEY_L) {
+            selection -= cheatsPerPage;
+            if(selection < 0) {
+                selection = numCheats - 1;
+            }
 
             return true;
         }
-    } else if(key == UI_KEY_DOWN) {
-        if(selection < numCheats - 1) {
-            selection++;
+    }
 
-            return true;
-        }
-    } else if(key == UI_KEY_RIGHT || key == UI_KEY_LEFT) {
-        cheatEngine->toggleCheat(selection, !cheatEngine->isCheatEnabled(selection));
-
-        return true;
-    } else if(key == UI_KEY_R) {
-        selection += cheatsPerPage;
-        if(selection >= numCheats) {
-            selection = 0;
-        }
-
-        return true;
-    } else if(key == UI_KEY_L) {
-        selection -= cheatsPerPage;
-        if(selection < 0) {
-            selection = numCheats - 1;
-        }
-
-        return true;
-    } else if(key == UI_KEY_B) {
+    if(key == UI_KEY_B) {
         menuPop();
+    } else if(key == UI_KEY_X) {
+        if(uiIsStringInputSupported()) {
+            std::string name;
+            std::string value;
+
+            if(uiInputString(name, 128, "Cheat Name") && uiInputString(value, 128, "Cheat Value")) {
+                cheatEngine->addCheat(name, value);
+            }
+
+            return true;
+        }
     }
 
     return false;
@@ -47,6 +62,9 @@ bool CheatsMenu::processInput(UIKey key, u32 width, u32 height) {
 
 void CheatsMenu::draw(u32 width, u32 height) {
     cheatsPerPage = height - 2;
+    if(uiIsStringInputSupported()) {
+        cheatsPerPage--;
+    }
 
     CheatEngine* cheatEngine = mgrGetCheatEngine();
 
@@ -55,7 +73,7 @@ void CheatsMenu::draw(u32 width, u32 height) {
     u32 page = selection / cheatsPerPage;
 
     uiAdvanceCursor(10);
-    uiPrint("Cheat Menu      %" PRIu32 "/%" PRIu32 "\n\n", page + 1, numPages);
+    uiPrint("Cheat Menu      %" PRIu32 "/%" PRIu32 "\n\n", numPages > 0 ? page + 1 : 0, numPages);
     for(u32 i = page * cheatsPerPage; i < numCheats && i < (page + 1) * cheatsPerPage; i++) {
         if(selection == i) {
             uiSetLineHighlighted(true);
@@ -103,5 +121,10 @@ void CheatsMenu::draw(u32 width, u32 height) {
         if(selection == i) {
             uiSetLineHighlighted(false);
         }
+    }
+
+    if(uiIsStringInputSupported()) {
+        uiSetLine(height - 1);
+        uiPrint("Press X to add a cheat.");
     }
 }

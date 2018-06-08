@@ -152,4 +152,14 @@ UIKey uiReadKey() {
     }
 }
 
+// TODO: Add string input support to SDL.
+
+bool uiIsStringInputSupported() {
+    return false;
+}
+
+bool uiInputString(std::string& out, size_t maxLength, const std::string& hint) {
+    return false;
+}
+
 #endif

@@ -45,3 +45,6 @@ void uiPrintv(const char* str, va_list list);
 void uiFlush();
 
 UIKey uiReadKey();
+
+bool uiIsStringInputSupported();
+bool uiInputString(std::string& out, size_t maxLength, const std::string& hint);

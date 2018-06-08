@@ -22,7 +22,6 @@ bool mgrLoadState(int stateNum);
 bool mgrSaveState(int stateNum);
 void mgrDeleteState(int stateNum);
 
-bool mgrCheatsExist();
 CheatEngine* mgrGetCheatEngine();
 
 void mgrRefreshPalette();

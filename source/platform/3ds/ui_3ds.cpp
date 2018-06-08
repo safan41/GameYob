@@ -194,4 +194,23 @@ UIKey uiReadKey() {
     return UI_KEY_NONE;
 }
 
+bool uiIsStringInputSupported() {
+    return true;
+}
+
+bool uiInputString(std::string& out, size_t maxLength, const std::string& hint) {
+    char* buf = new char[maxLength];
+
+    SwkbdState swkbd;
+    swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, maxLength < 65000 ? maxLength : 65000);
+    swkbdSetHintText(&swkbd, hint.c_str());
+    swkbdSetValidation(&swkbd, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+    SwkbdButton button = swkbdInputText(&swkbd, buf, maxLength);
+
+    out = std::string(buf);
+    delete[] buf;
+
+    return button == SWKBD_BUTTON_CONFIRM;
+}
+
 #endif

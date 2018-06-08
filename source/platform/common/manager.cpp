@@ -964,10 +964,6 @@ void mgrDeleteState(int stateNum) {
     remove(mgrGetStatePath(stateNum).c_str());
 }
 
-bool mgrCheatsExist() {
-    return cheatEngine != nullptr && cheatEngine->getNumCheats() > 0;
-}
-
 CheatEngine* mgrGetCheatEngine() {
     return cheatEngine;
 }

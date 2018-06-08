@@ -254,7 +254,6 @@ void MainMenu::printMessage(const std::string& m) {
 void MainMenu::updateGameStatus() {
     bool cartLoaded = mgrIsRomLoaded();
     bool stateExists = mgrStateExists(stateNum);
-    bool cheatsExist = mgrCheatsExist();
 
     setItemEnabled(ACTION_MENU, ACTION_MENU_SUSPEND, cartLoaded);
     setItemEnabled(ACTION_MENU, ACTION_MENU_STATE_SLOT, cartLoaded);
@@ -262,7 +261,7 @@ void MainMenu::updateGameStatus() {
     setItemEnabled(ACTION_MENU, ACTION_MENU_LOAD_STATE, cartLoaded && stateExists);
     setItemEnabled(ACTION_MENU, ACTION_MENU_DELETE_STATE, cartLoaded && stateExists);
     setItemEnabled(ACTION_MENU, ACTION_MENU_ROM_INFO, cartLoaded);
-    setItemEnabled(ACTION_MENU, ACTION_MENU_MANAGE_CHEATS, cartLoaded && cheatsExist);
+    setItemEnabled(ACTION_MENU, ACTION_MENU_MANAGE_CHEATS, cartLoaded);
 }
 
 u8 MainMenu::getSubMenuCount() {
