@@ -9,6 +9,11 @@
 #define TO_INT(a) ( (a) >= 'a' ? (a) - 'a' + 10 : (a) >= 'A' ? (a) - 'A' + 10 : (a) - '0')
 
 void CheatEngine::reset() {
+    u32 numCheats = this->cheats.size();
+    for(u32 i = 0; i < numCheats; i++) {
+        this->toggleCheat(i, false);
+    }
+
     this->cheats.clear();
 }
 
