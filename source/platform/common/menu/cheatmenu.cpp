@@ -2,9 +2,9 @@
 
 #include "platform/common/menu/cheatmenu.h"
 #include "platform/common/menu/menu.h"
-#include "cheatengine.h"
 #include "platform/common/manager.h"
 #include "platform/ui.h"
+#include "cheatengine.h"
 
 bool CheatsMenu::processInput(UIKey key, u32 width, u32 height) {
     CheatEngine* cheatEngine = mgrGetCheatEngine();

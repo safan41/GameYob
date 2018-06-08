@@ -33,3 +33,4 @@ Requires:
     value=011092D0
     enabled=0
     ```
+  * Cheats can be chained together under one name by separating individual codes with "+".
