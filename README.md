@@ -6,9 +6,10 @@ Credit to [gamesquest1](http://gbatemp.net/members/gamesquest1.335456/) for the 
 
 Download: https://github.com/Steveice10/GameYob/releases
 
-Requires devkitARM, ctrulib, and citro3d to build for 3DS.
-Requires devkitA64 and libnx to build for Switch.
-Requires SDL2 and libncurses to build for PC.
+Requires:
+* devkitARM, ctrulib, and citro3d to build for 3DS.
+* devkitA64 and libnx to build for Switch.
+* SDL2 and libncurses to build for PC.
 
 ## General Features
 * Gameboy, Gameboy Color, Super Gameboy emulation.
