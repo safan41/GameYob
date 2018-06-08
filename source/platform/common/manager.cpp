@@ -13,12 +13,12 @@
 #include <fstream>
 #include <sstream>
 
+#include "libs/inih/INIReader.h"
 #include "libs/stb_image/stb_image.h"
 
 #include "platform/common/menu/filechooser.h"
 #include "platform/common/menu/mainmenu.h"
 #include "platform/common/menu/menu.h"
-#include "platform/common/cheatengine.h"
 #include "platform/common/config.h"
 #include "platform/common/manager.h"
 #include "platform/audio.h"
@@ -484,7 +484,6 @@ static const u32* findPalette(const char* title) {
 #define NS_PER_FRAME ((s64) (1000000000.0 / ((double) CYCLES_PER_SECOND / (double) CYCLES_PER_FRAME)))
 
 static Gameboy* gameboy = nullptr;
-static CheatEngine* cheatEngine = nullptr;
 
 static int fastForwardCounter;
 
@@ -740,8 +739,6 @@ void mgrInit() {
     gameboy->settings.audioSamples = sizeof(audioBuffer) / sizeof(u32);
     gameboy->settings.audioSampleRate = audioGetSampleRate();
 
-    cheatEngine = new CheatEngine(gameboy);
-
     fastForwardCounter = 0;
 
     memset(audioBuffer, 0, sizeof(audioBuffer));
@@ -769,26 +766,6 @@ void mgrExit() {
         delete gameboy;
         gameboy = nullptr;
     }
-
-    if(cheatEngine != nullptr) {
-        delete cheatEngine;
-        cheatEngine = nullptr;
-    }
-}
-
-void mgrReset() {
-    if(gameboy == nullptr) {
-        return;
-    }
-
-    gameboy->powerOff();
-    gameboy->powerOn();
-
-    mgrRefreshBorder();
-    mgrRefreshPalette();
-
-    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * GB_FRAME_HEIGHT * sizeof(u32));
-    gfxDrawScreen();
 }
 
 void mgrPrintDebug(const char* str, ...) {
@@ -812,160 +789,16 @@ Cartridge* mgrGetRom() {
     return gameboy->cartridge;
 }
 
-static void mgrPowerOn(const std::string& romFile) {
-    if(gameboy == nullptr) {
-        return;
-    }
-
-    mgrPowerOff();
-
-    if(!romFile.empty()) {
-        std::ifstream romStream(romFile, std::ios::binary | std::ios::ate);
-        if(!romStream.is_open()) {
-            mgrPrintDebug("Failed to open ROM file: %s\n", strerror(errno));
-            return;
-        }
-
-        u32 romSize = (u32) romStream.tellg();
-        romStream.seekg(0);
-
-        std::string::size_type dot = romFile.find_last_of('.');
-        if(dot != std::string::npos) {
-            romName = romFile.substr(0, dot);
-        } else {
-            romName = romFile;
-        }
-
-        std::string::size_type slash = romName.find_last_of('/');
-        if(slash != std::string::npos) {
-            romDir = romName.substr(0, slash + 1);
-            romName = romName.substr(slash + 1);
-        } else {
-            romDir = "/";
-        }
-
-        gameboy->cartridge = new Cartridge(romStream, romSize);
-
-        romStream.close();
-
-        std::ifstream saveStream(mgrGetBasePath(GAMEYOB_SAVE_PATH) + ".sav", std::ios::binary);
-        if(saveStream.is_open()) {
-            gameboy->cartridge->load(saveStream);
-            saveStream.close();
-        } else {
-            mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
-        }
-
-        cheatEngine->loadCheats(mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht");
-    }
-
-    mgrReset();
-
-    if(mgrStateExists(-1)) {
-        mgrLoadState(-1);
-        mgrDeleteState(-1);
-    }
-}
-
-static void mgrWriteSave() {
-    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
-        return;
-    }
-
-    std::ofstream stream(mgrGetBasePath(GAMEYOB_SAVE_PATH) + ".sav", std::ios::binary);
-    if(!stream.is_open()) {
-        mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
-        return;
-    }
-
-    gameboy->cartridge->save(stream);
-    stream.close();
-}
-
-void mgrPowerOff(bool save) {
-    if(gameboy != nullptr && gameboy->isPoweredOn()) {
-        if(gameboy->cartridge != nullptr) {
-            if(save) {
-                mgrWriteSave();
-            }
-
-            cheatEngine->saveCheats(mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht");
-
-            Cartridge* cart = gameboy->cartridge;
-            gameboy->cartridge = nullptr;
-            delete cart;
-        }
-
-        gameboy->powerOff();
-    }
-
-    romDir = "";
-    romName = "";
-
-    mgrRefreshBorder();
-
-    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * 224 * sizeof(u32));
-    gfxDrawScreen();
-}
-
-bool mgrStateExists(int stateNum) {
-    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
-        return false;
-    }
-
-    std::ifstream stream(mgrGetStatePath(stateNum), std::ios::binary);
-    if(stream.is_open()) {
-        stream.close();
-        return true;
-    }
-
-    return false;
-}
-
-bool mgrLoadState(int stateNum) {
-    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
-        return false;
-    }
-
-    std::ifstream stream(mgrGetStatePath(stateNum), std::ios::binary);
-    if(!stream.is_open()) {
-        mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
-        return false;
-    }
-
-    mgrReset();
-
-    bool ret = gameboy->loadState(stream);
-    stream.close();
-    return ret;
-}
-
-bool mgrSaveState(int stateNum) {
-    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
-        return false;
-    }
-
-    std::ofstream stream(mgrGetStatePath(stateNum), std::ios::binary);
-    if(!stream.is_open()) {
-        mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
-        return false;
-    }
-
-    bool ret = gameboy->saveState(stream);
-    stream.close();
-    return ret;
-}
-
-void mgrDeleteState(int stateNum) {
-    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
-        return;
-    }
-
-    remove(mgrGetStatePath(stateNum).c_str());
-}
-
 CheatEngine* mgrGetCheatEngine() {
-    return cheatEngine;
+    return &gameboy->cheatEngine;
+}
+
+bool mgrGetFastForward() {
+    return fastForward || (!menuIsVisible() && inputKeyHeld(FUNC_KEY_FAST_FORWARD));
+}
+
+static bool mgrIsPaused() {
+    return emulationPaused || (menuIsVisible() && configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_PAUSE_IN_MENU) == PAUSE_IN_MENU_ON);
 }
 
 void mgrRefreshPalette() {
@@ -1116,58 +949,214 @@ void mgrRefreshBorder() {
     }
 }
 
-bool mgrGetFastForward() {
-    return fastForward || (!menuIsVisible() && inputKeyHeld(FUNC_KEY_FAST_FORWARD));
+bool mgrStateExists(int stateNum) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return false;
+    }
+
+    std::ifstream stream(mgrGetStatePath(stateNum), std::ios::binary);
+    if(stream.is_open()) {
+        stream.close();
+        return true;
+    }
+
+    return false;
 }
 
-static bool mgrIsPaused() {
-    return emulationPaused || (menuIsVisible() && configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_PAUSE_IN_MENU) == PAUSE_IN_MENU_ON);
+bool mgrLoadState(int stateNum) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return false;
+    }
+
+    std::ifstream stream(mgrGetStatePath(stateNum), std::ios::binary);
+    if(!stream.is_open()) {
+        mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
+        return false;
+    }
+
+    mgrReset();
+
+    bool ret = gameboy->loadState(stream);
+    stream.close();
+    return ret;
 }
 
-static void mgrTakeScreenshot() {
-    u32 headerSize = 0x36;
-    u32 imageSize = GB_FRAME_WIDTH * GB_FRAME_HEIGHT * 4;
+bool mgrSaveState(int stateNum) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return false;
+    }
 
-    u8* header = new u8[headerSize]();
+    std::ofstream stream(mgrGetStatePath(stateNum), std::ios::binary);
+    if(!stream.is_open()) {
+        mgrPrintDebug("Failed to open state file: %s\n", strerror(errno));
+        return false;
+    }
 
-    *(u16*) &header[0x0] = 0x4D42; // Magic identifier
-    *(u32*) &header[0x2] = headerSize + imageSize;
-    *(u32*) &header[0xA] = headerSize;
-    *(u32*) &header[0xE] = 0x28; // Info header size
-    *(u32*) &header[0x12] = GB_FRAME_WIDTH;
-    *(u32*) &header[0x16] = GB_FRAME_HEIGHT;
-    *(u16*) &header[0x1A] = 1; // Color planes
-    *(u16*) &header[0x1C] = 32; // Bits per pixel
-    *(u32*) &header[0x22] = imageSize;
+    bool ret = gameboy->saveState(stream);
+    stream.close();
+    return ret;
+}
 
-    u32* image = new u32[GB_FRAME_WIDTH * GB_FRAME_HEIGHT]();
+void mgrDeleteState(int stateNum) {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return;
+    }
 
-    u32* buffer = gfxGetScreenBuffer();
-    u32 pitch = gfxGetScreenPitch();
+    remove(mgrGetStatePath(stateNum).c_str());
+}
 
-    for(u32 x = 0; x < GB_FRAME_WIDTH; x++) {
-        for(u32 y = 0; y < GB_FRAME_HEIGHT; y++) {
-            u32 src = buffer[y * pitch + x];
-            u32* dst = &image[(GB_FRAME_HEIGHT - y - 1) * GB_FRAME_WIDTH + x];
+static int mgrParseCheats(void* user, const char* section, const char* name, const char* value) {
+    CheatEngine* engine = (CheatEngine*) user;
 
-            *dst = ((src & 0xFF) << 24) | ((src >> 8) & 0xFFFFFF);
+    if(strcmp(name, "value") == 0) {
+        engine->addCheat(std::string(section), std::string(value));
+    } else if(strcmp(name, "enabled") == 0) {
+        engine->toggleCheat(std::string(section), strcmp(value, "1") == 0);
+    }
+
+    return 1;
+}
+
+static void mgrSaveCheats() {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return;
+    }
+
+    const std::string path = mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht";
+
+    u32 numCheats = gameboy->cheatEngine.getNumCheats();
+    if(numCheats == 0) {
+        remove(path.c_str());
+        return;
+    }
+
+    std::ofstream stream(path);
+    if(stream.is_open()) {
+        for(u32 i = 0; i < numCheats; i++) {
+            stream << "[" << gameboy->cheatEngine.getCheatName(i) << "]\n";
+            stream << "value=" << gameboy->cheatEngine.getCheatValue(i) << "\n";
+            stream << "enabled=" << (gameboy->cheatEngine.isCheatEnabled(i) ? 1 : 0) << "\n";
+            stream << "\n";
+        }
+
+        stream.close();
+    }
+}
+
+static void mgrWriteSave() {
+    if(gameboy == nullptr || gameboy->cartridge == nullptr) {
+        return;
+    }
+
+    std::ofstream stream(mgrGetBasePath(GAMEYOB_SAVE_PATH) + ".sav", std::ios::binary);
+    if(!stream.is_open()) {
+        mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
+        return;
+    }
+
+    gameboy->cartridge->save(stream);
+    stream.close();
+}
+
+void mgrReset() {
+    if(gameboy == nullptr) {
+        return;
+    }
+
+    if(gameboy->isPoweredOn()) {
+        mgrSaveCheats();
+    }
+
+    gameboy->powerOff();
+    gameboy->powerOn();
+
+    mgrRefreshBorder();
+    mgrRefreshPalette();
+
+    const std::string cheatsPath = mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht";
+    ini_parse(cheatsPath.c_str(), mgrParseCheats, &gameboy->cheatEngine);
+
+    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * GB_FRAME_HEIGHT * sizeof(u32));
+    gfxDrawScreen();
+}
+
+static void mgrPowerOn(const std::string& romFile) {
+    if(gameboy == nullptr) {
+        return;
+    }
+
+    mgrPowerOff();
+
+    if(!romFile.empty()) {
+        std::ifstream romStream(romFile, std::ios::binary | std::ios::ate);
+        if(!romStream.is_open()) {
+            mgrPrintDebug("Failed to open ROM file: %s\n", strerror(errno));
+            return;
+        }
+
+        u32 romSize = (u32) romStream.tellg();
+        romStream.seekg(0);
+
+        std::string::size_type dot = romFile.find_last_of('.');
+        if(dot != std::string::npos) {
+            romName = romFile.substr(0, dot);
+        } else {
+            romName = romFile;
+        }
+
+        std::string::size_type slash = romName.find_last_of('/');
+        if(slash != std::string::npos) {
+            romDir = romName.substr(0, slash + 1);
+            romName = romName.substr(slash + 1);
+        } else {
+            romDir = "/";
+        }
+
+        gameboy->cartridge = new Cartridge(romStream, romSize);
+
+        romStream.close();
+
+        std::ifstream saveStream(mgrGetBasePath(GAMEYOB_SAVE_PATH) + ".sav", std::ios::binary);
+        if(saveStream.is_open()) {
+            gameboy->cartridge->load(saveStream);
+            saveStream.close();
+        } else {
+            mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         }
     }
 
-    std::stringstream fileStream;
-    fileStream << "gameyob_" << time(nullptr) << ".bmp";
+    mgrReset();
 
-    std::ofstream stream(fileStream.str(), std::ios::binary);
-    if(stream.is_open()) {
-        stream.write((char*) header, (size_t) headerSize);
-        stream.write((char*) image, (size_t) imageSize);
-        stream.close();
-    } else {
-        mgrPrintDebug("Failed to open screenshot file: %s\n", strerror(errno));
+    if(mgrStateExists(-1)) {
+        mgrLoadState(-1);
+        mgrDeleteState(-1);
+    }
+}
+
+void mgrPowerOff(bool save) {
+    if(gameboy != nullptr && gameboy->isPoweredOn()) {
+        if(gameboy->cartridge != nullptr) {
+            if(save) {
+                mgrWriteSave();
+            }
+
+            mgrSaveCheats();
+
+            Cartridge* cart = gameboy->cartridge;
+            gameboy->cartridge = nullptr;
+            delete cart;
+        }
+
+        gameboy->powerOff();
     }
 
-    delete[] header;
-    delete[] image;
+    romDir = "";
+    romName = "";
+
+    mgrRefreshBorder();
+
+    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * 224 * sizeof(u32));
+    gfxDrawScreen();
 }
 
 void mgrRun() {
@@ -1198,6 +1187,7 @@ void mgrRun() {
     if(gameboy->isPoweredOn()) {
         if(inputKeyPressed(FUNC_KEY_SAVE)) {
             mgrWriteSave();
+            mgrSaveCheats();
         }
 
         if(inputKeyPressed(FUNC_KEY_FAST_FORWARD_TOGGLE)) {
@@ -1210,10 +1200,6 @@ void mgrRun() {
 
         if(inputKeyPressed(FUNC_KEY_RESET)) {
             mgrReset();
-        }
-
-        if(inputKeyPressed(FUNC_KEY_SCREENSHOT)) {
-            mgrTakeScreenshot();
         }
 
         if(inputKeyPressed(FUNC_KEY_MENU) || inputKeyPressed(FUNC_KEY_MENU_PAUSE)) {
@@ -1281,8 +1267,6 @@ void mgrRun() {
                     autoFireCounterB--;
                 }
             }
-
-            cheatEngine->applyRamCheats();
 
             gameboy->sgb.setController(0, buttonsPressed);
             gameboy->runFrame();

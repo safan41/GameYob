@@ -3,6 +3,7 @@
 #include "types.h"
 
 #include "apu.h"
+#include "cheatengine.h"
 #include "cpu.h"
 #include "mmu.h"
 #include "ppu.h"
@@ -14,6 +15,7 @@
 class APU;
 class CPU;
 class Cartridge;
+class CheatEngine;
 class PPU;
 class Printer;
 class Serial;
@@ -121,6 +123,7 @@ public:
     SGB sgb;
     Timer timer;
     Serial serial;
+    CheatEngine cheatEngine;
 
     GBMode gbMode;
 

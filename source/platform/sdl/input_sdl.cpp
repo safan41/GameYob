@@ -44,7 +44,6 @@ void inputInit() {
     defaultKeyConfig.funcKeys[SDL_SCANCODE_LALT] = FUNC_KEY_FAST_FORWARD_TOGGLE;
     defaultKeyConfig.funcKeys[SDL_SCANCODE_RCTRL] = FUNC_KEY_SCALE;
     defaultKeyConfig.funcKeys[SDL_SCANCODE_RALT] = FUNC_KEY_RESET;
-    defaultKeyConfig.funcKeys[SDL_SCANCODE_BACKSPACE] = FUNC_KEY_SCREENSHOT;
 }
 
 void inputCleanup() {

@@ -2,7 +2,7 @@
 
 #include "platform/common/menu/cheatmenu.h"
 #include "platform/common/menu/menu.h"
-#include "platform/common/cheatengine.h"
+#include "cheatengine.h"
 #include "platform/common/manager.h"
 #include "platform/ui.h"
 

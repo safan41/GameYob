@@ -4,7 +4,7 @@
 #include "libs/inih/INIReader.h"
 
 #include "platform/common/menu/menu.h"
-#include "platform/common/cheatengine.h"
+#include "cheatengine.h"
 #include "platform/common/config.h"
 #include "platform/common/manager.h"
 #include "platform/input.h"
@@ -31,8 +31,7 @@ static const std::string funcKeyNames[NUM_FUNC_KEYS] = {
         "Fast Forward",
         "FF Toggle",
         "Scale",
-        "Reset",
-        "Screenshot"
+        "Reset"
 };
 
 typedef struct {

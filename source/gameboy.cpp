@@ -14,7 +14,7 @@
 
 static const u8 STATE_VERSION = 13;
 
-Gameboy::Gameboy() : mmu(this), cpu(this), ppu(this), apu(this), sgb(this), timer(this), serial(this) {
+Gameboy::Gameboy() : mmu(this), cpu(this), ppu(this), apu(this), sgb(this), timer(this), serial(this), cheatEngine(this) {
     this->cartridge = nullptr;
 }
 
@@ -55,6 +55,7 @@ void Gameboy::powerOn() {
     this->sgb.reset();
     this->timer.reset();
     this->serial.reset();
+    this->cheatEngine.reset();
 
     if(this->cartridge != nullptr) {
         this->cartridge->reset(this);
@@ -119,6 +120,8 @@ void Gameboy::runFrame() {
 
     this->ranFrame = false;
     this->audioSamplesWritten = 0;
+
+    this->cheatEngine.update();
 
     while(!this->ranFrame) {
         this->cpu.run();

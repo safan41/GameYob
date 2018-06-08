@@ -5,7 +5,7 @@
 #include "platform/common/menu/filechooser.h"
 #include "platform/common/menu/mainmenu.h"
 #include "platform/common/menu/rominfo.h"
-#include "platform/common/cheatengine.h"
+#include "cheatengine.h"
 #include "platform/common/config.h"
 #include "platform/common/manager.h"
 #include "platform/system.h"

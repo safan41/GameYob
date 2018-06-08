@@ -23,9 +23,8 @@ enum {
     FUNC_KEY_FAST_FORWARD_TOGGLE = 15,
     FUNC_KEY_SCALE = 16,
     FUNC_KEY_RESET = 17,
-    FUNC_KEY_SCREENSHOT = 18,
 
-    NUM_FUNC_KEYS = 19
+    NUM_FUNC_KEYS = 18
 };
 
 void inputInit();

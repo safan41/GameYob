@@ -10,18 +10,29 @@ class CheatEngine {
 public:
     CheatEngine(Gameboy* g) : gameboy(g) {}
 
-    void loadCheats(const std::string& filename);
-    void saveCheats(const std::string& filename);
-
-    inline u32 getNumCheats() { return (u32) cheatsVec.size(); }
-
-    inline const std::string getCheatName(u32 cheat) { return cheatsVec[cheat].name; }
-    inline bool isCheatEnabled(u32 cheat) { return cheatsVec[cheat].enabled; }
+    void reset();
+    void update();
 
     void addCheat(const std::string& name, const std::string& value);
-    void toggleCheat(u32 cheat, bool enabled);
 
-    void applyRamCheats();
+    void toggleCheat(u32 cheat, bool enabled);
+    void toggleCheat(const std::string& cheat, bool enabled);
+
+    inline u32 getNumCheats() {
+        return (u32) this->cheats.size();
+    }
+
+    inline const std::string getCheatName(u32 cheat) {
+        return this->cheats[cheat].name;
+    }
+
+    inline const std::string getCheatValue(u32 cheat) {
+        return this->cheats[cheat].value;
+    }
+
+    inline bool isCheatEnabled(u32 cheat) {
+        return this->cheats[cheat].enabled;
+    }
 private:
     typedef enum {
         CHEAT_TYPE_UNKNOWN,
@@ -37,7 +48,7 @@ private:
         u8 data;
         union {
             u8 compare; /* For GameGenie codes */
-            u8 bank;    /* For Gameshark codes */
+            u8 bank;    /* For GameShark codes */
         };
         std::vector<u16> patchedBanks;  /* For GameGenie codes */
         std::vector<u8> patchedValues; /* For GameGenie codes */
@@ -53,11 +64,7 @@ private:
 
     Gameboy* gameboy;
 
-    std::vector<Cheat> cheatsVec;
+    std::vector<Cheat> cheats;
 
-    static int parseCheatsIni(void* user, const char* section, const char* name, const char* value);
     void parseLine(Cheat& cheat, const std::string& line);
-
-    void applyAllRomCheats();
-    void unapplyRomCheat(u32 cheat);
 };
