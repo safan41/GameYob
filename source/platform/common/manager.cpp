@@ -744,7 +744,7 @@ void mgrInit() {
     memset(audioBuffer, 0, sizeof(audioBuffer));
 
     lastFrameTime = systemGetNanoTime();
-    lastPrintTime = time(NULL);
+    lastPrintTime = time(nullptr);
     fastForward = false;
     fps = 0;
 
@@ -1283,7 +1283,7 @@ void mgrRun() {
 #ifndef BACKEND_SWITCH
             fps++;
 
-            time_t timeSec = time(NULL);
+            time_t timeSec = time(nullptr);
             if(timeSec - lastPrintTime > 0) {
                 lastPrintTime = timeSec;
 
