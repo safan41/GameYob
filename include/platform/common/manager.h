@@ -24,7 +24,7 @@ bool mgrLoadState(int stateNum);
 bool mgrSaveState(int stateNum);
 void mgrDeleteState(int stateNum);
 
+void mgrUnloadRom(bool save = true);
 void mgrReset();
-void mgrPowerOff(bool save = true);
 
 void mgrRun();

@@ -100,6 +100,8 @@ public:
     Gameboy();
     ~Gameboy();
 
+    void insert(Cartridge* cartridge);
+
     void powerOn();
     void powerOff();
 

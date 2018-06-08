@@ -760,7 +760,7 @@ void mgrInit() {
 }
 
 void mgrExit() {
-    mgrPowerOff();
+    mgrUnloadRom();
 
     if(gameboy != nullptr) {
         delete gameboy;
@@ -1011,7 +1011,13 @@ static int mgrParseCheats(void* user, const char* section, const char* name, con
     if(strcmp(name, "value") == 0) {
         engine->addCheat(std::string(section), std::string(value));
     } else if(strcmp(name, "enabled") == 0) {
-        engine->toggleCheat(std::string(section), strcmp(value, "1") == 0);
+        u32 numCheats = gameboy->cheatEngine.getNumCheats();
+        for(u32 i = 0; i < numCheats; i++) {
+            if(gameboy->cheatEngine.getCheatName(i) == section) {
+                engine->toggleCheat(i, strcmp(value, "1") == 0);
+                break;
+            }
+        }
     }
 
     return 1;
@@ -1058,34 +1064,20 @@ static void mgrWriteSave() {
     stream.close();
 }
 
-void mgrReset() {
-    if(gameboy == nullptr) {
-        return;
-    }
-
-    if(gameboy->isPoweredOn()) {
-        mgrSaveCheats();
-    }
-
-    gameboy->powerOff();
-    gameboy->powerOn();
-
+static void mgrRefreshState() {
     mgrRefreshBorder();
     mgrRefreshPalette();
-
-    const std::string cheatsPath = mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht";
-    ini_parse(cheatsPath.c_str(), mgrParseCheats, &gameboy->cheatEngine);
 
     memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * GB_FRAME_HEIGHT * sizeof(u32));
     gfxDrawScreen();
 }
 
-static void mgrPowerOn(const std::string& romFile) {
+static void mgrLoadRom(const std::string& romFile) {
     if(gameboy == nullptr) {
         return;
     }
 
-    mgrPowerOff();
+    gameboy->powerOff();
 
     if(!romFile.empty()) {
         std::ifstream romStream(romFile, std::ios::binary | std::ios::ate);
@@ -1112,7 +1104,7 @@ static void mgrPowerOn(const std::string& romFile) {
             romDir = "/";
         }
 
-        gameboy->cartridge = new Cartridge(romStream, romSize);
+        gameboy->insert(new Cartridge(romStream, romSize));
 
         romStream.close();
 
@@ -1123,9 +1115,14 @@ static void mgrPowerOn(const std::string& romFile) {
         } else {
             mgrPrintDebug("Failed to open save file: %s\n", strerror(errno));
         }
+
+        const std::string cheatsPath = mgrGetBasePath(GAMEYOB_CHEATS_PATH) + ".cht";
+        ini_parse(cheatsPath.c_str(), mgrParseCheats, &gameboy->cheatEngine);
     }
 
-    mgrReset();
+    gameboy->powerOn();
+
+    mgrRefreshState();
 
     if(mgrStateExists(-1)) {
         mgrLoadState(-1);
@@ -1133,30 +1130,40 @@ static void mgrPowerOn(const std::string& romFile) {
     }
 }
 
-void mgrPowerOff(bool save) {
-    if(gameboy != nullptr && gameboy->isPoweredOn()) {
-        if(gameboy->cartridge != nullptr) {
-            if(save) {
-                mgrWriteSave();
-            }
+void mgrUnloadRom(bool save) {
+    if(gameboy == nullptr) {
+        return;
+    }
 
-            mgrSaveCheats();
+    gameboy->powerOff();
 
-            Cartridge* cart = gameboy->cartridge;
-            gameboy->cartridge = nullptr;
-            delete cart;
+    if(gameboy->cartridge != nullptr) {
+        if(save) {
+            mgrWriteSave();
         }
 
-        gameboy->powerOff();
+        mgrSaveCheats();
+
+        Cartridge* cart = gameboy->cartridge;
+        gameboy->insert(nullptr);
+        delete cart;
     }
 
     romDir = "";
     romName = "";
 
-    mgrRefreshBorder();
+    mgrRefreshState();
+}
 
-    memset(gfxGetScreenBuffer(), 0, gfxGetScreenPitch() * 224 * sizeof(u32));
-    gfxDrawScreen();
+void mgrReset() {
+    if(gameboy == nullptr) {
+        return;
+    }
+
+    gameboy->powerOff();
+    gameboy->powerOn();
+
+    mgrRefreshState();
 }
 
 void mgrRun() {
@@ -1174,7 +1181,7 @@ void mgrRun() {
         // TODO: Preserve path changes.
         menuPush(new FileChooser([](bool chosen, const std::string& path) -> void {
             if(chosen)  {
-                mgrPowerOn(path);
+                mgrLoadRom(path);
             } else {
                 systemRequestExit();
             }

@@ -388,7 +388,7 @@ void MainMenu::doItemAction(u8 menu, u8 item) {
 }
 
 void MainMenu::exit() {
-    mgrPowerOff();
+    mgrUnloadRom();
 
     menuPop();
 }
@@ -402,7 +402,7 @@ void MainMenu::reset() {
 void MainMenu::suspend() {
     printMessage("Saving state...");
     mgrSaveState(-1);
-    mgrPowerOff();
+    mgrUnloadRom();
 
     menuPop();
 }
@@ -463,7 +463,8 @@ void MainMenu::saveSettings() {
 
 void MainMenu::exitWithoutSaving() {
     menuPop();
-    mgrPowerOff(false);
+
+    mgrUnloadRom(false);
 }
 
 void MainMenu::quitToLauncher() {

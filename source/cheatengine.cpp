@@ -8,15 +8,6 @@
 
 #define TO_INT(a) ( (a) >= 'a' ? (a) - 'a' + 10 : (a) >= 'A' ? (a) - 'A' + 10 : (a) - '0')
 
-void CheatEngine::reset() {
-    u32 numCheats = this->cheats.size();
-    for(u32 i = 0; i < numCheats; i++) {
-        this->toggleCheat(i, false);
-    }
-
-    this->cheats.clear();
-}
-
 void CheatEngine::update() {
     for(const Cheat& cheat : this->cheats) {
         if(cheat.enabled) {
@@ -41,6 +32,15 @@ void CheatEngine::update() {
             }
         }
     }
+}
+
+void CheatEngine::clearCheats() {
+    u32 numCheats = this->cheats.size();
+    for(u32 i = 0; i < numCheats; i++) {
+        this->toggleCheat(i, false);
+    }
+
+    this->cheats.clear();
 }
 
 void CheatEngine::parseLine(Cheat& cheat, const std::string& line) {
@@ -161,16 +161,6 @@ void CheatEngine::toggleCheat(u32 cheat, bool enabled) {
                     line.patchedValues.clear();
                 }
             }
-        }
-    }
-}
-
-void CheatEngine::toggleCheat(const std::string& name, bool enabled) {
-    u32 numCheats = this->cheats.size();
-    for(u32 i = 0; i < numCheats; i++) {
-        if(this->cheats[i].name == name) {
-            this->toggleCheat(i, enabled);
-            break;
         }
     }
 }

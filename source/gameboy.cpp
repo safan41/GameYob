@@ -22,6 +22,15 @@ Gameboy::~Gameboy() {
     this->cartridge = nullptr;
 }
 
+void Gameboy::insert(Cartridge* cartridge) {
+    this->cartridge = cartridge;
+    if(this->cartridge != nullptr) {
+        this->cartridge->reset(this);
+    }
+
+    this->cheatEngine.clearCheats();
+}
+
 void Gameboy::powerOn() {
     if(this->poweredOn) {
         return;
@@ -55,7 +64,6 @@ void Gameboy::powerOn() {
     this->sgb.reset();
     this->timer.reset();
     this->serial.reset();
-    this->cheatEngine.reset();
 
     if(this->cartridge != nullptr) {
         this->cartridge->reset(this);

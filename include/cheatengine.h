@@ -10,13 +10,11 @@ class CheatEngine {
 public:
     CheatEngine(Gameboy* g) : gameboy(g) {}
 
-    void reset();
     void update();
 
+    void clearCheats();
     void addCheat(const std::string& name, const std::string& value);
-
     void toggleCheat(u32 cheat, bool enabled);
-    void toggleCheat(const std::string& cheat, bool enabled);
 
     inline u32 getNumCheats() {
         return (u32) this->cheats.size();
