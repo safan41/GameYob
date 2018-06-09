@@ -172,7 +172,7 @@ Cartridge::Cartridge(std::istream& romData, u32 romSize) {
                 break;
             default:
                 if(this->gameboy->settings.printDebug != nullptr) {
-                    this->gameboy->settings.printDebug("Invalid RAM bank number: %x\nDefaulting to 4 banks.\n", this->getRawRamSize());
+                    this->gameboy->settings.printDebug("Invalid RAM bank number: %x\nDefaulting to 4 pages.\n", this->getRawRamSize());
                 }
 
                 this->totalRamBanks = 4;
@@ -186,16 +186,16 @@ Cartridge::Cartridge(std::istream& romData, u32 romSize) {
 
 Cartridge::~Cartridge() {
     if(this->gameboy != nullptr) {
-        this->gameboy->mmu.mapBankBlock(0x0, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x1, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x2, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x3, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x4, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x5, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x6, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x7, nullptr);
-        this->gameboy->mmu.mapBankBlock(0xA, nullptr);
-        this->gameboy->mmu.mapBankBlock(0xB, nullptr);
+        this->gameboy->mmu.mapPage(0x0, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x1, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x2, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x3, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x4, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x5, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x6, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x7, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0xA, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0xB, nullptr, false, false);
 
         this->gameboy = nullptr;
     }
@@ -367,23 +367,25 @@ void Cartridge::writeSram(u16 addr, u8 val) {
 }
 
 void Cartridge::mapRomBank0() {
+    bool override = this->gameboy->mmu.isBiosMapped();
+
     u16 bank = this->romBank0 & (this->totalRomBanks - 1);
-    if(bank < this->totalRomBanks) {
+    if(!override && bank < this->totalRomBanks) {
         u8* bankPtr = &this->rom[bank * ROM_BANK_SIZE];
 
-        this->gameboy->mmu.mapBankBlock(0x0, bankPtr + 0x0000);
-        this->gameboy->mmu.mapBankBlock(0x1, bankPtr + 0x1000);
-        this->gameboy->mmu.mapBankBlock(0x2, bankPtr + 0x2000);
-        this->gameboy->mmu.mapBankBlock(0x3, bankPtr + 0x3000);
+        this->gameboy->mmu.mapPage(0x0, bankPtr + 0x0000, true, false);
+        this->gameboy->mmu.mapPage(0x1, bankPtr + 0x1000, true, false);
+        this->gameboy->mmu.mapPage(0x2, bankPtr + 0x2000, true, false);
+        this->gameboy->mmu.mapPage(0x3, bankPtr + 0x3000, true, false);
     } else {
-        if(this->gameboy->settings.printDebug != nullptr) {
+        if(!override && this->gameboy->settings.printDebug != nullptr) {
             this->gameboy->settings.printDebug("Attempted to access invalid ROM bank: %" PRIu16 "\n", bank);
         }
 
-        this->gameboy->mmu.mapBankBlock(0x0, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x1, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x2, nullptr);
-        this->gameboy->mmu.mapBankBlock(0x3, nullptr);
+        this->gameboy->mmu.mapPage(0x0, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x1, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x2, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0x3, nullptr, false, false);
     }
 }
 
@@ -395,55 +397,58 @@ void Cartridge::mapRomBank1() {
         if(bank1A < totalHalfBanks) {
             u8* bankPtr = &this->rom[bank1A * HALF_ROM_BANK_SIZE];
 
-            this->gameboy->mmu.mapBankBlock(0x4, bankPtr + 0x0000);
-            this->gameboy->mmu.mapBankBlock(0x5, bankPtr + 0x1000);
+            this->gameboy->mmu.mapPage(0x4, bankPtr + 0x0000, true, false);
+            this->gameboy->mmu.mapPage(0x5, bankPtr + 0x1000, true, false);
         } else {
             if(this->gameboy->settings.printDebug != nullptr) {
                 this->gameboy->settings.printDebug("Attempted to access invalid ROM half-bank: %" PRIu8 "\n", bank1A);
             }
 
-            this->gameboy->mmu.mapBankBlock(0x4, nullptr);
-            this->gameboy->mmu.mapBankBlock(0x5, nullptr);
+            this->gameboy->mmu.mapPage(0x4, nullptr, false, false);
+            this->gameboy->mmu.mapPage(0x5, nullptr, false, false);
         }
 
         u8 bank1B = this->mbc6.romBank1B & (totalHalfBanks - 1);
         if(bank1B < totalHalfBanks) {
             u8* bankPtr = &this->rom[bank1B * HALF_ROM_BANK_SIZE];
 
-            this->gameboy->mmu.mapBankBlock(0x6, bankPtr + 0x0000);
-            this->gameboy->mmu.mapBankBlock(0x7, bankPtr + 0x1000);
+            this->gameboy->mmu.mapPage(0x6, bankPtr + 0x0000, true, false);
+            this->gameboy->mmu.mapPage(0x7, bankPtr + 0x1000, true, false);
         } else {
             if(this->gameboy->settings.printDebug != nullptr) {
                 this->gameboy->settings.printDebug("Attempted to access invalid ROM half-bank: %" PRIu8 "\n", bank1B);
             }
 
-            this->gameboy->mmu.mapBankBlock(0x6, nullptr);
-            this->gameboy->mmu.mapBankBlock(0x7, nullptr);
+            this->gameboy->mmu.mapPage(0x6, nullptr, false, false);
+            this->gameboy->mmu.mapPage(0x7, nullptr, false, false);
         }
     } else {
         u16 bank = this->romBank1 & (this->totalRomBanks - 1);
         if(bank < this->totalRomBanks) {
             u8* bankPtr = &this->rom[bank * ROM_BANK_SIZE];
 
-            this->gameboy->mmu.mapBankBlock(0x4, bankPtr + 0x0000);
-            this->gameboy->mmu.mapBankBlock(0x5, bankPtr + 0x1000);
-            this->gameboy->mmu.mapBankBlock(0x6, bankPtr + 0x2000);
-            this->gameboy->mmu.mapBankBlock(0x7, bankPtr + 0x3000);
+            this->gameboy->mmu.mapPage(0x4, bankPtr + 0x0000, true, false);
+            this->gameboy->mmu.mapPage(0x5, bankPtr + 0x1000, true, false);
+            this->gameboy->mmu.mapPage(0x6, bankPtr + 0x2000, true, false);
+            this->gameboy->mmu.mapPage(0x7, bankPtr + 0x3000, true, false);
         } else {
             if(this->gameboy->settings.printDebug != nullptr) {
                 this->gameboy->settings.printDebug("Attempted to access invalid ROM bank: %" PRIu16 "\n", bank);
             }
 
-            this->gameboy->mmu.mapBankBlock(0x4, nullptr);
-            this->gameboy->mmu.mapBankBlock(0x5, nullptr);
-            this->gameboy->mmu.mapBankBlock(0x6, nullptr);
-            this->gameboy->mmu.mapBankBlock(0x7, nullptr);
+            this->gameboy->mmu.mapPage(0x4, nullptr, false, false);
+            this->gameboy->mmu.mapPage(0x5, nullptr, false, false);
+            this->gameboy->mmu.mapPage(0x6, nullptr, false, false);
+            this->gameboy->mmu.mapPage(0x7, nullptr, false, false);
         }
     }
 }
 
 void Cartridge::mapSramBank() {
     if(this->sramEnabled && this->totalRamBanks > 0) {
+        bool read = this->readFunc == nullptr;
+        bool write = this->writeSramFunc == nullptr;
+
         if(this->mbcType == MBC6) {
             u16 totalHalfBanks = this->totalRamBanks << 1;
 
@@ -451,52 +456,55 @@ void Cartridge::mapSramBank() {
             if(bankA < totalHalfBanks) {
                 u8* bankPtr = &this->sram[bankA * HALF_SRAM_BANK_SIZE];
 
-                this->gameboy->mmu.mapBankBlock(0xA, bankPtr);
+                this->gameboy->mmu.mapPage(0xA, bankPtr, read, write);
             } else {
                 if(this->gameboy->settings.printDebug != nullptr) {
                     this->gameboy->settings.printDebug("Attempted to access invalid SRAM half-bank: %" PRIu8 "\n", bankA);
                 }
 
-                this->gameboy->mmu.mapBankBlock(0xA, nullptr);
+                this->gameboy->mmu.mapPage(0xA, nullptr, false, false);
             }
 
             u8 bankB = this->mbc6.sramBankB & (totalHalfBanks - 1);
             if(bankB < totalHalfBanks) {
                 u8* bankPtr = &this->sram[bankB * HALF_SRAM_BANK_SIZE];
 
-                this->gameboy->mmu.mapBankBlock(0xB, bankPtr);
+                this->gameboy->mmu.mapPage(0xB, bankPtr, read, write);
             } else {
                 if(this->gameboy->settings.printDebug != nullptr) {
                     this->gameboy->settings.printDebug("Attempted to access invalid SRAM half-bank: %" PRIu8 "\n", bankB);
                 }
 
-                this->gameboy->mmu.mapBankBlock(0xB, nullptr);
+                this->gameboy->mmu.mapPage(0xB, nullptr, false, false);
             }
         } else {
             u8 bank = this->sramBank & (this->totalRamBanks - 1);
             if(bank < this->totalRamBanks) {
                 u8* bankPtr = &this->sram[bank * SRAM_BANK_SIZE];
 
-                this->gameboy->mmu.mapBankBlock(0xA, bankPtr + 0x0000);
-                this->gameboy->mmu.mapBankBlock(0xB, bankPtr + 0x1000);
+                this->gameboy->mmu.mapPage(0xA, bankPtr + 0x0000, read, write);
+                this->gameboy->mmu.mapPage(0xB, bankPtr + 0x1000, read, write);
             } else {
                 // Only report if there's no chance it's a special bank number.
                 if(this->readFunc == nullptr && this->gameboy->settings.printDebug != nullptr) {
                     this->gameboy->settings.printDebug("Attempted to access invalid SRAM bank: %" PRIu8 "\n", bank);
                 }
 
-                this->gameboy->mmu.mapBankBlock(0xA, nullptr);
-                this->gameboy->mmu.mapBankBlock(0xB, nullptr);
+                this->gameboy->mmu.mapPage(0xA, nullptr, false, false);
+                this->gameboy->mmu.mapPage(0xB, nullptr, false, false);
             }
         }
     } else {
-        this->gameboy->mmu.mapBankBlock(0xA, nullptr);
-        this->gameboy->mmu.mapBankBlock(0xB, nullptr);
+        this->gameboy->mmu.mapPage(0xA, nullptr, false, false);
+        this->gameboy->mmu.mapPage(0xB, nullptr, false, false);
     }
 }
 
 void Cartridge::mapBanks() {
-    this->mapRomBank0();
+    if(!this->gameboy->mmu.isBiosMapped()) {
+        this->mapRomBank0();
+    }
+
     this->mapRomBank1();
     this->mapSramBank();
 }

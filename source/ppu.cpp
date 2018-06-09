@@ -122,8 +122,8 @@ void PPU::reset() {
 
 void PPU::mapBanks() {
     u8 bank = (u8) (this->gameboy->gbMode == MODE_CGB && (this->gameboy->mmu.readIO(VBK) & 0x1) != 0);
-    this->gameboy->mmu.mapBankBlock(0x8, this->vram[bank] + 0x0000);
-    this->gameboy->mmu.mapBankBlock(0x9, this->vram[bank] + 0x1000);
+    this->gameboy->mmu.mapPage(0x8, this->vram[bank] + 0x0000, true, true);
+    this->gameboy->mmu.mapPage(0x9, this->vram[bank] + 0x1000, true, true);
 }
 
 inline void PPU::checkLYC() {

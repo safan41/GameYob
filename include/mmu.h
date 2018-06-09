@@ -99,8 +99,10 @@ public:
     friend std::istream& operator>>(std::istream& is, MMU& mmu);
     friend std::ostream& operator<<(std::ostream& os, const MMU& mmu);
 
-    inline void mapBankBlock(u8 bank, u8* block) {
-        this->banks[bank & 0xF] = block;
+    inline void mapPage(u8 page, u8* block, bool read, bool write) {
+        this->pages[page & 0xF] = block;
+        this->pageRead[page & 0xF] = read;
+        this->pageWrite[page & 0xF] = write;
     }
 
     inline u8 readIO(u16 addr) {
@@ -119,7 +121,9 @@ private:
 
     Gameboy* gameboy;
 
-    u8* banks[0x10];
+    u8* pages[0x10];
+    bool pageRead[0x10];
+    bool pageWrite[0x10];
 
     u8 wram[8][0x1000];
     u8 hram[0x100];
