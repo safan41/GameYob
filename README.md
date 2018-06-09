@@ -25,7 +25,7 @@ Requires:
 * Custom border images
   * Place "(romname).(png/jpg/etc)" in the borders folder if you have one set; otherwise, place it in the same folder as the ROM.
   * Can also set a global default border in the display options.
-* Cheat Codes
+* GameGenie (XXX-XXX or XXX-XXX-XXX) and GameShark (XXXXXXXX) Cheat Codes
   * Place "(romname).cht" in the cheats folder if you have one set; otherwise, place it in the same folder as the ROM.
   * Example code:
     ```
