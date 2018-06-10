@@ -251,7 +251,7 @@ void MainMenu::printMessage(const std::string& m) {
 }
 
 void MainMenu::updateGameStatus() {
-    bool cartLoaded = mgrIsRomLoaded();
+    bool cartLoaded = mgrGetGameboy()->cartridge != nullptr;
     bool stateExists = mgrStateExists(stateNum);
 
     setItemEnabled(ACTION_MENU, ACTION_MENU_SUSPEND, cartLoaded);

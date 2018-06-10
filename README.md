@@ -18,10 +18,14 @@ Requires:
 * Gameboy Printer emulation.
 * Show the original BIOS animation.
 * Fast forwarding.
-* Scale to fit the screen height or fill the screen entirely.
-* Toggle individual sound channels.
 * Save States.
 * Remappable controls.
+* Toggle individual sound channels.
+* Multiple scaling modes.
+  * Aspect - Fits game to screen height, including SGB border space if applicable.
+  * Aspect (Screen Only) - Fits game to screen height.
+  * Full - Stretches game to fill screen, including SGB border space if applicable.
+  * Full (Screen Only) - Stretches game to fill screen.
 * Custom border images
   * Place "(romname).(png/jpg/etc)" in the borders folder if you have one set; otherwise, place it in the same folder as the ROM.
   * Can also set a global default border in the display options.

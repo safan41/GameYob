@@ -3,6 +3,7 @@
 #include "platform/common/manager.h"
 #include "platform/ui.h"
 #include "cartridge.h"
+#include "gameboy.h"
 
 bool RomInfoMenu::processInput(UIKey key, u32 width, u32 height) {
     if(key == UI_KEY_A || key == UI_KEY_B) {
@@ -13,10 +14,10 @@ bool RomInfoMenu::processInput(UIKey key, u32 width, u32 height) {
 }
 
 void RomInfoMenu::draw(u32 width, u32 height) {
-    if(mgrIsRomLoaded()) {
-        static const char* mbcNames[] = {"ROM", "MBC1", "MBC2", "MBC3", "MBC5", "MBC7", "MMM01", "HUC1", "HUC3", "CAMERA", "TAMA5"};
+    Cartridge* cartridge = mgrGetGameboy()->cartridge;
 
-        Cartridge* cartridge = mgrGetRom();
+    if(cartridge != nullptr) {
+        static const char* mbcNames[] = {"ROM", "MBC1", "MBC2", "MBC3", "MBC5", "MBC7", "MMM01", "HUC1", "HUC3", "CAMERA", "TAMA5"};
 
         uiPrint("ROM Title: \"%s\"\n", cartridge->getRomTitle().c_str());
         uiPrint("SGB: Supported: %d\n", cartridge->isSgbEnhanced());

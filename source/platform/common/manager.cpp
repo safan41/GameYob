@@ -781,6 +781,10 @@ void mgrPrintDebug(const char* str, ...) {
 #endif
 }
 
+Gameboy* mgrGetGameboy() {
+    return gameboy;
+}
+
 bool mgrIsRomLoaded() {
     return gameboy->cartridge != nullptr;
 }

@@ -2,17 +2,14 @@
 
 #include "types.h"
 
-class Cartridge;
-class CheatEngine;
+class Gameboy;
 
 void mgrInit();
 void mgrExit();
 
 void mgrPrintDebug(const char* str, ...);
 
-bool mgrIsRomLoaded();
-Cartridge* mgrGetRom();
-CheatEngine* mgrGetCheatEngine();
+Gameboy* mgrGetGameboy();
 
 bool mgrGetFastForward();
 

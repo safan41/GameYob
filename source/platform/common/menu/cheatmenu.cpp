@@ -5,9 +5,10 @@
 #include "platform/common/manager.h"
 #include "platform/ui.h"
 #include "cheatengine.h"
+#include "gameboy.h"
 
 bool CheatsMenu::processInput(UIKey key, u32 width, u32 height) {
-    CheatEngine* cheatEngine = mgrGetCheatEngine();
+    CheatEngine* cheatEngine = &mgrGetGameboy()->cheatEngine;
     u32 numCheats = cheatEngine->getNumCheats();
 
     if(numCheats > 0) {
@@ -68,7 +69,7 @@ void CheatsMenu::draw(u32 width, u32 height) {
         cheatsPerPage--;
     }
 
-    CheatEngine* cheatEngine = mgrGetCheatEngine();
+    CheatEngine* cheatEngine = &mgrGetGameboy()->cheatEngine;
 
     u32 numCheats = cheatEngine->getNumCheats();
     u32 numPages = numCheats > 0 ? (numCheats - 1) / cheatsPerPage + 1 : 0;
