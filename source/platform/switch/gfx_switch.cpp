@@ -190,8 +190,4 @@ void gfxDrawScreen() {
     }
 }
 
-void gfxResetResolution() {
-    gfxConfigureResolution(defaultWidth, defaultHeight);
-}
-
 #endif
