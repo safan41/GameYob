@@ -153,8 +153,8 @@ void PPU::update() {
         }
 
         if(this->gameboy->ranFrame && this->gameboy->settings.frameBuffer != nullptr) {
-            for(u8 y = 40; y < 184; y++) {
-                memset(&this->gameboy->settings.frameBuffer[y * this->gameboy->settings.framePitch + 48], 0xFF, GB_SCREEN_WIDTH * sizeof(u32));
+            for(u8 y = GB_SCREEN_Y; y < GB_SCREEN_Y + GB_SCREEN_HEIGHT; y++) {
+                memset(&this->gameboy->settings.frameBuffer[y * this->gameboy->settings.framePitch + GB_SCREEN_X], 0xFF, GB_SCREEN_WIDTH * sizeof(u32));
             }
         }
 
@@ -678,7 +678,7 @@ inline void PPU::drawPixel(u8 x, u8 y) {
         return;
     }
 
-    u32* colorOut = &this->gameboy->settings.frameBuffer[(y + 40) * this->gameboy->settings.framePitch + (x + 48)];
+    u32* colorOut = &this->gameboy->settings.frameBuffer[(y + GB_SCREEN_Y) * this->gameboy->settings.framePitch + (x + GB_SCREEN_X)];
     bool emulateBlur = this->gameboy->settings.getOption(GB_OPT_EMULATE_BLUR);
 
     switch(this->gameboy->sgb.getGfxMask()) {
@@ -782,7 +782,7 @@ inline void PPU::drawScanline(u8 scanline) {
         return;
     }
 
-    u32* lineBuffer = &this->gameboy->settings.frameBuffer[(scanline + 40) * this->gameboy->settings.framePitch + 48];
+    u32* lineBuffer = &this->gameboy->settings.frameBuffer[(scanline + GB_SCREEN_Y) * this->gameboy->settings.framePitch + GB_SCREEN_X];
     bool emulateBlur = this->gameboy->settings.getOption(GB_OPT_EMULATE_BLUR);
 
     switch(this->gameboy->sgb.getGfxMask()) {

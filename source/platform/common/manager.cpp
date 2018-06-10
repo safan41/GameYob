@@ -760,7 +760,7 @@ void mgrInit() {
 }
 
 void mgrExit() {
-    mgrUnloadRom();
+    mgrUnloadRom(true, true);
 
     if(gameboy != nullptr) {
         delete gameboy;
@@ -783,18 +783,6 @@ void mgrPrintDebug(const char* str, ...) {
 
 Gameboy* mgrGetGameboy() {
     return gameboy;
-}
-
-bool mgrIsRomLoaded() {
-    return gameboy->cartridge != nullptr;
-}
-
-Cartridge* mgrGetRom() {
-    return gameboy->cartridge;
-}
-
-CheatEngine* mgrGetCheatEngine() {
-    return &gameboy->cheatEngine;
 }
 
 bool mgrGetFastForward() {
@@ -934,7 +922,7 @@ static bool mgrTryBorderFile(const std::string& border) {
 void mgrRefreshBorder() {
     gfxLoadBorder(nullptr, 0, 0);
 
-    if(configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON && gameboy != nullptr && gameboy->cartridge != nullptr) {
+    if(gameboy != nullptr && gameboy->cartridge != nullptr && configGetMultiChoice(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDERS) == CUSTOM_BORDERS_ON) {
         std::vector<std::string> supportedExtensions = configGetPathExtensions(GROUP_DISPLAY, DISPLAY_CUSTOM_BORDER_PATH);
 
         const std::string basePath = mgrGetBasePath(GAMEYOB_BORDER_PATH);
@@ -1134,7 +1122,7 @@ static void mgrLoadRom(const std::string& romFile) {
     }
 }
 
-void mgrUnloadRom(bool save) {
+void mgrUnloadRom(bool save, bool exiting) {
     if(gameboy == nullptr) {
         return;
     }
@@ -1156,7 +1144,9 @@ void mgrUnloadRom(bool save) {
     romDir = "";
     romName = "";
 
-    mgrRefreshState();
+    if(!exiting) {
+        mgrRefreshState();
+    }
 }
 
 void mgrReset() {
