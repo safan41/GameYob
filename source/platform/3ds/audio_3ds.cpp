@@ -97,8 +97,6 @@ void audioPlay(u32* buffer, long samples) {
                 currPos -= buf->nsamples;
                 currBuffer = (currBuffer + 1) % NUM_BUFFERS;
             }
-        } else if(!mgrGetFastForward()) {
-            usleep(10);
         } else {
             break;
         }

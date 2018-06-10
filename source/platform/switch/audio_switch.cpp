@@ -82,8 +82,6 @@ void audioPlay(u32* buffer, long samples) {
                 currBuffer = nullptr;
                 currPos = 0;
             }
-        } else if(!mgrGetFastForward()) {
-            svcSleepThread(10000);
         } else {
             break;
         }
