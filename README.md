@@ -22,9 +22,9 @@ Requires:
 * Remappable controls.
 * Toggle individual sound channels.
 * Multiple scaling modes.
-  * Aspect - Fits game to screen height, including SGB border space if applicable.
+  * Aspect - Fits game to screen height, including border space if applicable.
   * Aspect (Screen Only) - Fits game to screen height.
-  * Full - Stretches game to fill screen, including SGB border space if applicable.
+  * Full - Stretches game to fill screen, including border space if applicable.
   * Full (Screen Only) - Stretches game to fill screen.
 * Custom border images
   * Place "(romname).(png/jpg/etc)" in the borders folder if you have one set; otherwise, place it in the same folder as the ROM.
