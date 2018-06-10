@@ -120,7 +120,7 @@ static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u32 viewpo
     }
 }
 
-// TODO: Scaling Filters, Full Screen Modes, Custom Border Scaling Options
+// TODO: Scaling Filters, Custom Border Scaling Options
 void gfxDrawScreen() {
     if(!menuIsVisible()) {
         u8 scaleMode = configGetMultiChoice(GROUP_DISPLAY, DISPLAY_SCALING_MODE);
@@ -133,12 +133,8 @@ void gfxDrawScreen() {
         float scaleHeight = 1;
         gfxScaleDimensions(&scaleWidth, &scaleHeight, defaultWidth, defaultHeight);
 
-        if(scaleWidth > scaleHeight) {
-            scaleWidth = scaleHeight;
-        }
-
         u32 scaledViewportWidth = (u32) (defaultWidth / scaleWidth);
-        u32 scaledViewportHeight = (u32) (defaultHeight / scaleWidth);
+        u32 scaledViewportHeight = (u32) (defaultHeight / scaleHeight);
 
         if(viewportWidth != scaledViewportWidth || viewportHeight != scaledViewportHeight) {
             gfxConfigureResolution(scaledViewportWidth, scaledViewportHeight);
