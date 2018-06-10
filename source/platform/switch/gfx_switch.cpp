@@ -107,7 +107,7 @@ static void gfxScaleDimensions(float* scaleWidth, float* scaleHeight, u32 viewpo
     *scaleWidth = 1;
     *scaleHeight = 1;
 
-    if(scaleMode == SCALING_MODE_ASPECT_SCREEN_ONLY || (scaleMode == SCALING_MODE_ASPECT && borderBuffer == nullptr && mgrGetGameboy()->gbMode != MODE_SGB )) {
+    if(scaleMode == SCALING_MODE_ASPECT_SCREEN_ONLY || (scaleMode == SCALING_MODE_ASPECT && borderBuffer == nullptr && mgrGetGameboy()->gbMode != MODE_SGB)) {
         *scaleWidth = *scaleHeight = viewportHeight / (float) GB_SCREEN_HEIGHT;
     } else if(scaleMode == SCALING_MODE_ASPECT) {
         *scaleWidth = *scaleHeight = viewportHeight / (float) GB_FRAME_HEIGHT;
