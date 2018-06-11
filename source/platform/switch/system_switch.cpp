@@ -39,16 +39,6 @@ void systemRequestExit() {
     requestedExit = true;
 }
 
-u64 systemGetNanoTime() {
-    uint64_t freq = 0;
-    asm volatile("mrs %0,cntfrq_el0" :"=r"(freq));
-
-    uint64_t ticks = 0;
-    asm volatile("mrs %0,cntpct_el0" :"=r"(ticks));
-
-    return ticks * 1000000000 / freq;
-}
-
 u32* systemGetCameraImage() {
     return nullptr;
 }

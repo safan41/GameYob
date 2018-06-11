@@ -8,10 +8,10 @@
 #endif
 
 #include <algorithm>
-#include <cstring>
-#include <ctime>
+#include <chrono>
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 
 #include "libs/inih/INIReader.h"
 #include "libs/stb_image/stb_image.h"
@@ -341,7 +341,7 @@ static const u32 pCls[] = {
 };
 
 struct GbcPaletteEntry {
-    const char* title;
+    const std::string title;
     const u32* p;
 };
 
@@ -471,9 +471,9 @@ static const GbcPaletteEntry gbcPalettes[] = {
         {"ZELDA",            p511},
 };
 
-static const u32* findPalette(const char* title) {
+static const u32* findPalette(const std::string& title) {
     for(u32 i = 0; i < (sizeof gbcPalettes) / (sizeof gbcPalettes[0]); i++) {
-        if(strcmp(gbcPalettes[i].title, title) == 0) {
+        if(gbcPalettes[i].title == title) {
             return gbcPalettes[i].p;
         }
     }
@@ -489,8 +489,8 @@ static int fastForwardCounter;
 
 static u32 audioBuffer[2048];
 
-static u64 lastFrameTime;
-static time_t lastPrintTime;
+static std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
+static std::chrono::time_point<std::chrono::system_clock> lastPrintTime;
 static int fps;
 static bool fastForward;
 
@@ -743,8 +743,8 @@ void mgrInit() {
 
     memset(audioBuffer, 0, sizeof(audioBuffer));
 
-    lastFrameTime = systemGetNanoTime();
-    lastPrintTime = time(nullptr);
+    lastFrameTime = std::chrono::high_resolution_clock::now();
+    lastPrintTime = std::chrono::system_clock::now();
     fastForward = false;
     fps = 0;
 
@@ -805,7 +805,7 @@ void mgrRefreshPalette() {
             break;
         case COLORIZE_GB_AUTO:
             if(gameboy->cartridge != nullptr) {
-                palette = findPalette(gameboy->cartridge->getRomTitle().c_str());
+                palette = findPalette(gameboy->cartridge->getRomTitle());
             }
 
             if(palette == nullptr) {
@@ -1211,9 +1211,10 @@ void mgrRun() {
             menuOpenMain();
         }
 
-        u64 nanoTime = systemGetNanoTime();
-        if(!mgrIsPaused() && (mgrGetFastForward() || nanoTime - lastFrameTime >= NS_PER_FRAME)) {
-            lastFrameTime = nanoTime;
+        auto frameTime = std::chrono::high_resolution_clock::now();
+        s64 nsPassed = std::chrono::duration_cast<std::chrono::nanoseconds>(frameTime - lastFrameTime).count();
+        if(!mgrIsPaused() && (mgrGetFastForward() || nsPassed >= NS_PER_FRAME)) {
+            lastFrameTime = frameTime;
 
             u8 buttonsPressed = 0xFF;
 
@@ -1284,9 +1285,10 @@ void mgrRun() {
 #ifndef BACKEND_SWITCH
             fps++;
 
-            time_t timeSec = time(nullptr);
-            if(timeSec - lastPrintTime > 0) {
-                lastPrintTime = timeSec;
+            auto printTime = std::chrono::system_clock::now();
+            s64 secPassed = std::chrono::duration_cast<std::chrono::seconds>(printTime - lastPrintTime).count();
+            if(secPassed > 0) {
+                lastPrintTime = printTime;
 
                 u8 mode = configGetMultiChoice(GROUP_GAMEYOB, GAMEYOB_CONSOLE_OUTPUT);
                 bool showFPS = mode == CONSOLE_OUTPUT_FPS || mode == CONSOLE_OUTPUT_FPS_TIME;
@@ -1295,38 +1297,30 @@ void mgrRun() {
                 if(!menuIsVisible() && (showFPS || showTime)) {
                     uiClear();
 
-                    int fpsLength = 0;
+                    u32 width = 0;
+                    uiGetSize(&width, nullptr);
+
                     if(showFPS) {
-                        char buffer[16];
-                        snprintf(buffer, 16, "FPS: %d", fps);
-                        uiPrint("%s", buffer);
-                        fpsLength = (int) strlen(buffer);
+                        std::stringstream fpsStream;
+                        fpsStream << "FPS: " << fps;
+                        std::string fpsString = fpsStream.str();
+
+                        uiPrint("%s", fpsString.c_str());
+
+                        width -= fpsString.length();
                     }
 
                     if(showTime) {
-                        char* timeString = ctime(&timeSec);
-                        for(int i = 0; ; i++) {
-                            if(timeString[i] == ':') {
-                                timeString += i - 2;
-                                break;
-                            }
-                        }
+                        std::time_t timet = std::chrono::system_clock::to_time_t(printTime);
+                        std::tm* local = std::localtime(&timet);
 
-                        char timeDisplay[6] = {0};
-                        strncpy(timeDisplay, timeString, 5);
+                        std::stringstream timeStream;
+                        timeStream << std::put_time(local, "%H:%M");
+                        std::string timeString = timeStream.str();
 
-                        u32 width = 0;
-                        uiGetSize(&width, nullptr);
-
-                        int spaces = (int) width - strlen(timeDisplay) - fpsLength;
-                        for(int i = 0; i < spaces; i++) {
-                            uiPrint(" ");
-                        }
-
-                        uiPrint("%s", timeDisplay);
+                        uiAdvanceCursor(width - timeString.length());
+                        uiPrint("%s", timeString.c_str());
                     }
-
-                    uiPrint("\n");
 
                     uiFlush();
                 }
