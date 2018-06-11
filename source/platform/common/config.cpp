@@ -175,7 +175,7 @@ static ConfigGroup display = {
                 {
                         "Scaling Mode",
                         {"Off", "Aspect", "Aspect (Screen Only)", "Full", "Full (Screen Only)"},
-                        SCALING_MODE_OFF,
+                        SCALING_MODE_ASPECT,
                         mgrRefreshBorder
                 },
                 {
