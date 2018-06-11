@@ -141,27 +141,6 @@ void gfxDrawScreen() {
             framebuffer = (u32*) gfxGetFramebuffer(&viewportWidth, &viewportHeight);
         }
 
-        // TODO: Flip draw order when transparency is supported.
-
-        // Draw the border.
-        if(borderBuffer != nullptr && scaleMode != SCALING_MODE_FULL_SCREEN_ONLY) {
-            // Calculate output points.
-            const int x1 = ((int) viewportWidth - borderWidth) / 2;
-            const int y1 = ((int) viewportHeight - borderHeight) / 2;
-
-            // Copy to framebuffer.
-            for(int x = 0; x < (int) borderWidth; x++) {
-                for(int y = 0; y < (int) borderHeight; y++) {
-                    int dstX = x + x1;
-                    int dstY = y + y1;
-
-                    if(dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
-                        framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(borderBuffer[y * borderWidth + x]);
-                    }
-                }
-            }
-        }
-
         // Draw the screen.
         {
             // Calculate output points.
@@ -176,6 +155,28 @@ void gfxDrawScreen() {
 
                     if(dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
                         framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(screenBuffer[y * GB_FRAME_WIDTH + x]);
+                    }
+                }
+            }
+        }
+
+        // Draw the border.
+        if(borderBuffer != nullptr && scaleMode != SCALING_MODE_FULL_SCREEN_ONLY) {
+            // Calculate output points.
+            const int x1 = ((int) viewportWidth - borderWidth) / 2;
+            const int y1 = ((int) viewportHeight - borderHeight) / 2;
+
+            // Copy to framebuffer.
+            for(int x = 0; x < (int) borderWidth; x++) {
+                for(int y = 0; y < (int) borderHeight; y++) {
+                    int dstX = x + x1;
+                    int dstY = y + y1;
+
+                    u32 pixel = borderBuffer[y * borderWidth + x];
+
+                    // TODO: Full transparency support.
+                    if((pixel & 0xFF) != 0 && dstX >= 0 && dstY >= 0 && dstX < (int) viewportWidth && dstY < (int) viewportHeight) {
+                        framebuffer[gfxGetFramebufferDisplayOffset((u32) dstX, (u32) dstY)] = __builtin_bswap32(pixel);
                     }
                 }
             }
