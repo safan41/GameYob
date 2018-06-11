@@ -1,10 +1,10 @@
 #ifdef BACKEND_3DS
 
+#include <chrono>
 #include <cstring>
 
 #include <3ds.h>
 
-#include "platform/common/menu/filechooser.h"
 #include "platform/common/menu/menu.h"
 #include "platform/common/config.h"
 #include "platform/input.h"
@@ -125,11 +125,13 @@ static u32 funcKeyMapping[NUM_FUNC_KEYS];
 static bool forceReleased[NUM_FUNC_KEYS] = {false};
 static bool uiForceReleased[NUM_BUTTONS] = {false};
 
-static u64 nextUiRepeat = 0;
+static std::chrono::time_point<std::chrono::system_clock> nextUiRepeat;
 
 extern void uiPushInput(UIKey key);
 
 void inputInit() {
+    nextUiRepeat = std::chrono::system_clock::now();
+
     HIDUSER_EnableAccelerometer();
 }
 
@@ -139,14 +141,18 @@ void inputCleanup() {
 
 void inputUpdate() {
     hidScanInput();
+
+    u32 down = hidKeysDown();
+    u32 held = hidKeysHeld();
+
     for(u32 i = 0; i < NUM_FUNC_KEYS; i++) {
-        if(!(hidKeysHeld() & funcKeyMapping[i])) {
+        if(!(held & funcKeyMapping[i])) {
             forceReleased[i] = false;
         }
     }
 
     for(u32 i = 0; i < NUM_BUTTONS; i++) {
-        if(!(hidKeysHeld() & (1 << i))) {
+        if(!(held & (1U << i))) {
             uiForceReleased[i] = false;
         }
     }
@@ -157,13 +163,15 @@ void inputUpdate() {
                 continue;
             }
 
-            u32 button = 1 << i;
+            auto time = std::chrono::system_clock::now();
+
+            u32 button = 1U << i;
             bool pressed = false;
-            if(hidKeysDown() & button) {
-                nextUiRepeat = osGetTime() + 250;
+            if(down & button) {
+                nextUiRepeat = time + std::chrono::milliseconds(250);
                 pressed = true;
-            } else if((hidKeysHeld() & button) && osGetTime() >= nextUiRepeat) {
-                nextUiRepeat = osGetTime() + 50;
+            } else if((held & button) && time >= nextUiRepeat) {
+                nextUiRepeat = time + std::chrono::milliseconds(50);
                 pressed = true;
             }
 
@@ -185,15 +193,9 @@ bool inputKeyPressed(u32 key) {
     return key < NUM_FUNC_KEYS && !forceReleased[key] && (hidKeysDown() & funcKeyMapping[key]) != 0;
 }
 
-void inputKeyRelease(u32 key) {
-    if(key < NUM_FUNC_KEYS) {
-        forceReleased[key] = true;
-    }
-}
-
 void inputReleaseAll() {
     for(u32 i = 0; i < NUM_FUNC_KEYS; i++) {
-        inputKeyRelease(i);
+        forceReleased[i] = true;
     }
 
     for(u32 i = 0; i < NUM_BUTTONS; i++) {

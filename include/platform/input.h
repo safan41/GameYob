@@ -34,7 +34,6 @@ void inputUpdate();
 
 bool inputKeyHeld(u32 key);
 bool inputKeyPressed(u32 key);
-void inputKeyRelease(u32 key);
 void inputReleaseAll();
 
 void inputGetMotionSensor(u16* x, u16* y);

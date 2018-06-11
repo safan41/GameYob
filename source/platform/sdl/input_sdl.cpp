@@ -78,15 +78,9 @@ bool inputKeyPressed(u32 key) {
     return key < NUM_FUNC_KEYS && !forceReleased[key] && pressed[key];
 }
 
-void inputKeyRelease(u32 key) {
-    if(key < NUM_FUNC_KEYS) {
-        forceReleased[key] = true;
-    }
-}
-
 void inputReleaseAll() {
     for(u32 i = 0; i < NUM_FUNC_KEYS; i++) {
-        inputKeyRelease(i);
+        forceReleased[i] = true;
     }
 }
 

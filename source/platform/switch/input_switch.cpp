@@ -1,13 +1,12 @@
 #ifdef BACKEND_SWITCH
 
+#include <chrono>
 #include <cstring>
-#include <ctime>
 
 #include <switch.h>
 
-#include "platform/common/config.h"
-#include "platform/common/menu/filechooser.h"
 #include "platform/common/menu/menu.h"
+#include "platform/common/config.h"
 #include "platform/input.h"
 #include "platform/ui.h"
 
@@ -111,11 +110,12 @@ static u64 funcKeyMapping[NUM_FUNC_KEYS];
 static bool forceReleased[NUM_FUNC_KEYS] = {false};
 static bool uiForceReleased[NUM_BUTTONS] = {false};
 
-static time_t nextUiRepeat = 0;
+static std::chrono::time_point<std::chrono::system_clock> nextUiRepeat;
 
 extern void uiPushInput(UIKey key);
 
 void inputInit() {
+    nextUiRepeat = std::chrono::system_clock::now();
 }
 
 void inputCleanup() {
@@ -145,15 +145,15 @@ void inputUpdate() {
                 continue;
             }
 
-            time_t currTime = time(nullptr);
+            auto time = std::chrono::system_clock::now();
 
             u64 button = 1U << i;
             bool pressed = false;
             if(down & button) {
-                nextUiRepeat = currTime + 250;
+                nextUiRepeat = time + std::chrono::milliseconds(250);
                 pressed = true;
-            } else if((held & button) && currTime >= nextUiRepeat) {
-                nextUiRepeat = currTime + 50;
+            } else if((held & button) && time >= nextUiRepeat) {
+                nextUiRepeat = time + std::chrono::milliseconds(50);
                 pressed = true;
             }
 
@@ -175,15 +175,9 @@ bool inputKeyPressed(u32 key) {
     return key < NUM_FUNC_KEYS && !forceReleased[key] && (hidKeysDown(CONTROLLER_HANDHELD) & funcKeyMapping[key]) != 0;
 }
 
-void inputKeyRelease(u32 key) {
-    if(key < NUM_FUNC_KEYS) {
-        forceReleased[key] = true;
-    }
-}
-
 void inputReleaseAll() {
     for(u32 i = 0; i < NUM_FUNC_KEYS; i++) {
-        inputKeyRelease(i);
+        forceReleased[i] = true;
     }
 
     for(u32 i = 0; i < NUM_BUTTONS; i++) {
@@ -206,7 +200,7 @@ u32 inputGetKeyCount() {
 }
 
 bool inputIsValidKey(u32 keyIndex) {
-    return keyIndex >= 0 && keyIndex < NUM_BUTTONS && switchKeyNames[keyIndex].length() > 0;
+    return keyIndex < NUM_BUTTONS;
 }
 
 const std::string inputGetKeyName(u32 keyIndex) {
