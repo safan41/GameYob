@@ -1,7 +1,7 @@
 language: c
 compiler: gcc
 before_install: wget https://github.com/devkitPro/pacman/releases/download/devkitpro-pacman-1.0.1/devkitpro-pacman.deb
-install: sudo apt install devkitpro-pacman.deb
+install: sudo dpkg -i devkitpro-pacman.deb && sudo apt-get install -f
 before_script: sudo pacman -S 3ds-dev
 env: export DEVKITPRO=/opt/devkitPro
 script: make 3ds
