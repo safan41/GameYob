@@ -1,7 +1,7 @@
 language: cpp
 
 os: linux
-sudo: true
+sudo: false
 dist: trusty
 
 env:
