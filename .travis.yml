@@ -20,7 +20,7 @@ before_install:
 install:
   - sudo dpkg -i pacman.deb
   - sudo dkp-pacman -Sy
-  - sudo dkp-pacman -S devkitARM citro3d libctru --noconfirm
+  - sudo dkp-pacman -S devkitARM citro3d libctru picasso --noconfirm
   - export DEVKITPRO=/opt/devkitpro
   - export DEVKITARM=${DEVKITPRO}/devkitARM
 
